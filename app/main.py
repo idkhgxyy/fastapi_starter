@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api.routers import health
+from app.api.routers import health, users
 
 app = FastAPI(
     title="FastAPI Starter",
@@ -7,8 +7,9 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# 注册健康检查路由
+# 注册所有路由
 app.include_router(health.router, prefix="/api")
+app.include_router(users.router, prefix="/api/users", tags=["Users"])
 
 @app.get("/", summary="根目录重定向或欢迎信息", tags=["Root"])
 async def root():
