@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # 后端 API 服务
+  api:
+    build: .
+    container_name: fastapi-starter-api
+    ports:
+      - "8000:8000"
+    # 我们不把 .env 直接打进镜像，而是在运行时挂载，更安全灵活
+    env_file:
+      - .env
+    environment:
+      # 在 Docker Compose 网络里，API 连接数据库的地址不再是 localhost，而是 postgres 服务的名字（db）
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/fastapi_db
+    # 让代码挂载到容器中（方便开发时热重载，如果是纯生产部署可去掉 volumes）
+    volumes:
+      - .:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # 数据库服务
+  db:
+    image: postgres:15-alpine
+    container_name: fastapi-starter-db
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=fastapi_db
+    ports:
+      - "5432:5432"
+    # 把数据库文件持久化存到宿主机，防止容器销毁后数据丢失
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fastapi_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
