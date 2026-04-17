@@ -23,7 +23,9 @@ def get_password_hash(password: str) -> str:
         password = password[:72]
     return pwd_context.hash(password)
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+from typing import Optional
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """
     生成 JWT Token
     """

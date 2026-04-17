@@ -7,8 +7,10 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
+from typing import Optional
+
 class TokenPayload(BaseModel):
     """
     解析 Token 时内部使用的载荷格式
     """
-    sub: str | None = None
+    sub: Optional[str] = None

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional
 
 class UserBase(BaseModel):
@@ -23,5 +23,4 @@ class UserOut(UserBase):
     is_active: bool = True
     is_superuser: bool = False
 
-    class Config:
-        from_attributes = True  # 未来方便从 SQLAlchemy 模型直接转换为 Pydantic 模型
+    model_config = ConfigDict(from_attributes=True)
