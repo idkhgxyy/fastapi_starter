@@ -23,13 +23,8 @@ async def lifespan(app: FastAPI):
             result = connection.execute(text("SELECT 1"))
             logger.info(f"Database connection successful! (Test query returned: {result.scalar()})")
             
-        # --- 临时建表方案 (Day 6 会被 Alembic 替代) ---
-        logger.info("Creating database tables if not exist...")
-        Base.metadata.create_all(bind=engine)
-        logger.info("Tables setup complete.")
-        
     except Exception as e:
-        logger.error(f"Database connection or table creation failed: {e}")
+        logger.error(f"Database connection failed: {e}")
         # 这里只报 error 并不抛出异常（为了防止没有 DB 时整个项目起不来），生产中视情况可阻断启动。
     
     yield
