@@ -6,6 +6,7 @@ from app.schemas.user import UserCreate
 from app.models.user import User
 from app.utils.errors import AppException
 from app.core.logging import logger
+from app.core.security import get_password_hash
 
 class UserService:
     """
@@ -30,12 +31,12 @@ class UserService:
                 status_code=status.HTTP_400_BAD_REQUEST
             )
             
-        # 2. 将 Pydantic 请求模型转换为 SQLAlchemy 数据模型
+        # 2. 将 Pydantic 请求模型转换为 SQLAlchemy 数据模型，并对密码进行哈希加密
         db_user = User(
             username=user_in.username,
             email=user_in.email,
             full_name=user_in.full_name,
-            hashed_password=user_in.password,  # 注意：目前是明文，Day 7 会改为真正的 hash
+            hashed_password=get_password_hash(user_in.password),
             is_active=True
         )
         
