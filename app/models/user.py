@@ -19,3 +19,4 @@ class User(Base):
     # 密码存入数据库必须哈希处理。今天 Day 5 为了先跑通流程暂时存明文，Day 7 我们会接入哈希算法！
     hashed_password: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -21,6 +21,7 @@ class UserOut(UserBase):
     """
     id: int
     is_active: bool = True
+    is_superuser: bool = False
 
     class Config:
         from_attributes = True  # 未来方便从 SQLAlchemy 模型直接转换为 Pydantic 模型

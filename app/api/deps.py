@@ -60,3 +60,31 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
         )
         
     return user
+
+def get_current_active_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    检查当前用户是否被激活
+    """
+    if not current_user.is_active:
+        raise AppException(
+            code=1006,
+            msg="Inactive user",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    return current_user
+
+def get_current_active_superuser(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    """
+    检查当前用户是否是超级管理员
+    """
+    if not current_user.is_superuser:
+        raise AppException(
+            code=1007,
+            msg="The user doesn't have enough privileges",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    return current_user

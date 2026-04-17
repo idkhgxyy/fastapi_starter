@@ -68,3 +68,19 @@ class UserService:
         logger.info("Fetching all users")
         # 执行查询并获取所有结果
         return list(db.scalars(select(User)).all())
+
+    @classmethod
+    def delete_user(cls, db: Session, user_id: int) -> User:
+        logger.info(f"Attempting to delete user with ID: {user_id}")
+        user = db.get(User, user_id)
+        if not user:
+            logger.warning(f"User delete failed: ID {user_id} not found")
+            raise AppException(
+                code=1002, 
+                msg="User not found", 
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        db.delete(user)
+        db.commit()
+        logger.info(f"User deleted successfully. ID: {user_id}")
+        return user

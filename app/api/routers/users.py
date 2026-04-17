@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.schemas.user import UserCreate, UserOut
 from app.services.user_service import UserService
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_db, get_current_user, get_current_active_superuser
 from app.models.user import User
 
 router = APIRouter()
@@ -29,5 +29,22 @@ async def get_user(user_id: int, db: Session = Depends(get_db)):
     return UserService.get_user(db, user_id)
 
 @router.get("/", response_model=List[UserOut], summary="获取所有用户列表")
-async def list_users(db: Session = Depends(get_db)):
+async def list_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_superuser)
+):
+    """
+    需要超级管理员权限才能访问
+    """
     return UserService.list_users(db)
+
+@router.delete("/{user_id}", response_model=UserOut, summary="删除指定用户")
+async def delete_user(
+    user_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_superuser)
+):
+    """
+    需要超级管理员权限才能删除用户
+    """
+    return UserService.delete_user(db, user_id)
