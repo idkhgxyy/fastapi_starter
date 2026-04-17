@@ -19,7 +19,7 @@ import app.models  # 确保你的所有模型都在此模块暴露
 config = context.config
 
 # 3. 动态设置数据库连接 URL（从 .env 中读取，避免把密码写死在 alembic.ini 中）
-db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/fastapi_db")
+db_url = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_db")
 config.set_main_option("sqlalchemy.url", db_url)
 
 # Interpret the config file for Python logging.

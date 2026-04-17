@@ -10,7 +10,7 @@ load_dotenv()
 # 获取数据库连接地址，如果环境变量没有则使用默认值
 SQLALCHEMY_DATABASE_URL = os.getenv(
     "DATABASE_URL", 
-    "postgresql://postgres:postgres@localhost:5432/fastapi_db"
+    "postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_db"
 )
 
 # 初始化 SQLAlchemy 同步引擎
