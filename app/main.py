@@ -6,6 +6,8 @@ from app.api.routers import health, users
 from app.utils.errors import AppException, app_exception_handler
 from app.core.logging import logger
 from app.db.session import engine
+from app.db.base import Base
+from app.models.user import User  # 确保模型被导入，以便 create_all 能识别到它
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,8 +22,14 @@ async def lifespan(app: FastAPI):
         with engine.connect() as connection:
             result = connection.execute(text("SELECT 1"))
             logger.info(f"Database connection successful! (Test query returned: {result.scalar()})")
+            
+        # --- 临时建表方案 (Day 6 会被 Alembic 替代) ---
+        logger.info("Creating database tables if not exist...")
+        Base.metadata.create_all(bind=engine)
+        logger.info("Tables setup complete.")
+        
     except Exception as e:
-        logger.error(f"Database connection failed: {e}")
+        logger.error(f"Database connection or table creation failed: {e}")
         # 这里只报 error 并不抛出异常（为了防止没有 DB 时整个项目起不来），生产中视情况可阻断启动。
     
     yield
