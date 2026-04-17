@@ -7,8 +7,8 @@ from alembic import context
 import os
 from dotenv import load_dotenv
 
-# 1. 加载环境变量
-load_dotenv()
+# 1. 加载环境变量 (通过 pydantic-settings 处理，此处无需 load_dotenv)
+from app.core.config import settings
 
 # 2. 导入 SQLAlchemy Base 和所有数据模型
 from app.db.base import Base
@@ -18,9 +18,8 @@ import app.models  # 确保你的所有模型都在此模块暴露
 # access to the values within the .ini file in use.
 config = context.config
 
-# 3. 动态设置数据库连接 URL（从 .env 中读取，避免把密码写死在 alembic.ini 中）
-db_url = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_db")
-config.set_main_option("sqlalchemy.url", db_url)
+# 3. 动态设置数据库连接 URL（从 settings 中读取，避免把密码写死在 alembic.ini 中）
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

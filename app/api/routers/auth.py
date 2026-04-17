@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.schemas.auth import Token
 from app.services.auth_service import AuthService
-from app.core.security import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from app.core.security import create_access_token
+from app.core.config import settings
 from app.utils.errors import AppException
 
 router = APIRouter()
@@ -30,7 +31,7 @@ async def login_access_token(
             status_code=status.HTTP_401_UNAUTHORIZED
         )
         
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
     # 按照 JWT 标准，"sub" (subject) 存放用户的唯一标识符
     access_token = create_access_token(

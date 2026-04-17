@@ -5,6 +5,7 @@ from sqlalchemy import text
 from app.api.routers import health, users, auth
 from app.utils.errors import AppException, app_exception_handler
 from app.core.logging import logger
+from app.core.config import settings
 from app.db.session import engine
 from app.db.base import Base
 from app.models.user import User  # 确保模型被导入，以便 create_all 能识别到它
@@ -15,7 +16,7 @@ async def lifespan(app: FastAPI):
     FastAPI 生命周期管理器
     """
     # --- 启动时执行 ---
-    logger.info("Starting FastAPI application...")
+    logger.info(f"Starting {settings.PROJECT_NAME} v{settings.VERSION}...")
     logger.info("Testing database connection...")
     try:
         # 测试与 PostgreSQL 的连接

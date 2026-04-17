@@ -1,17 +1,10 @@
-import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
 from app.core.logging import logger
+from app.core.config import settings
 
-# 加载 .env 环境变量
-load_dotenv()
-
-# 获取数据库连接地址，如果环境变量没有则使用默认值
-SQLALCHEMY_DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_db"
-)
+# 从统一的配置中心读取数据库连接地址
+SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
 
 # 初始化 SQLAlchemy 同步引擎
 try:
