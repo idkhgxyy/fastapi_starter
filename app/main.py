@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from sqlalchemy import text
 
-from app.api.routers import health, users
+from app.api.routers import health, users, auth
 from app.utils.errors import AppException, app_exception_handler
 from app.core.logging import logger
 from app.db.session import engine
@@ -22,7 +22,6 @@ async def lifespan(app: FastAPI):
         with engine.connect() as connection:
             result = connection.execute(text("SELECT 1"))
             logger.info(f"Database connection successful! (Test query returned: {result.scalar()})")
-            
     except Exception as e:
         logger.error(f"Database connection failed: {e}")
         # 这里只报 error 并不抛出异常（为了防止没有 DB 时整个项目起不来），生产中视情况可阻断启动。
@@ -45,6 +44,7 @@ app.add_exception_handler(AppException, app_exception_handler)
 
 # 注册所有路由
 app.include_router(health.router, prefix="/api")
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 
 @app.get("/", summary="根目录重定向或欢迎信息", tags=["Root"])
