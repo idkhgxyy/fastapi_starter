@@ -1,5 +1,5 @@
-# 使用官方 Python 轻量级基础镜像
-FROM python:3.9-slim
+# 使用华为云 SWR 代理镜像，避免当前网络环境下访问 Docker Hub 失败
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.9-slim
 
 # 设置环境变量
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -9,9 +9,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # 设置工作目录
 WORKDIR /app
 
-# 安装系统依赖（如需编译某些 C 扩展可能需要 gcc 等，这里保持极简）
+# 安装系统依赖；curl 用于容器健康检查，libpq-dev 用于 PostgreSQL 驱动编译
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    curl \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 

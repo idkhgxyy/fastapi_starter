@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 15s  # 全局抓取间隔
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'fastapi-starter-api'
+    metrics_path: '/metrics'
+    static_configs:
+      # Prometheus 运行在 Docker 中，可以通过服务名访问我们的 api 服务
+      - targets: ['api:8000']

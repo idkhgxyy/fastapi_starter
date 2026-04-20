@@ -11,11 +11,21 @@ class Settings(BaseSettings):
     
     # 数据库配置
     DATABASE_URL: str = "postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_db"
+    REDIS_URL: str = "redis://localhost:6379/0"
     
     # JWT 鉴权配置
-    SECRET_KEY: str = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
+    SECRET_KEY: str = "replace_with_a_long_random_secret_key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
+    # LLM 配置 (切换为本地 Ollama)
+    LLM_API_KEY: str = "ollama"
+    LLM_BASE_URL: str = "http://ollama:11434/v1"
+    LLM_MODEL_NAME: str = "qwen2.5:3b"  # 使用 3B 模型兼顾速度和效果
+    EMBEDDING_MODEL_NAME: str = "bge-m3"  # Ollama 上的 bge-m3，维度为 1024
+    LLM_PROVIDER: str = "ollama"
+    LLM_INPUT_PRICE_PER_1K_TOKENS: float = 0.0
+    LLM_OUTPUT_PRICE_PER_1K_TOKENS: float = 0.0
 
     model_config = SettingsConfigDict(
         env_file=".env", 

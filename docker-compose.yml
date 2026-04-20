@@ -1,8 +1,7 @@
-version: '3.8'
-
 services:
   # 后端 API 服务
   api:
+    platform: linux/amd64
     build: .
     container_name: fastapi-starter-api
     ports:
@@ -13,17 +12,26 @@ services:
     environment:
       # 在 Docker Compose 网络里，API 连接数据库的地址不再是 localhost，而是 postgres 服务的名字（db）
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/fastapi_db
+      - REDIS_URL=redis://redis:6379/0
     # 让代码挂载到容器中（方便开发时热重载，如果是纯生产部署可去掉 volumes）
     volumes:
       - .:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
 
   # 数据库服务
   db:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: fastapi-starter-db
     restart: always
     environment:
@@ -41,5 +49,87 @@ services:
       timeout: 5s
       retries: 5
 
+  # Redis 缓存与消息队列
+  redis:
+    image: redis:7-alpine
+    container_name: fastapi-starter-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 异步任务 Worker 服务 (Celery)
+  celery_worker:
+    platform: linux/amd64
+    build: .
+    container_name: fastapi-starter-worker
+    command: celery -A app.worker.celery_app worker --loglevel=info
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/fastapi_db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  # 本地大模型与向量服务 (Ollama)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: fastapi-starter-ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 可观测性服务：Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: fastapi-starter-prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    depends_on:
+      - api
+
+  # 可观测性服务：Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: fastapi-starter-grafana
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+
 volumes:
   postgres_data:
+  redis_data:
+  ollama_data:
+  prometheus_data:
+  grafana_data:
