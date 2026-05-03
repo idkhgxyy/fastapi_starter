@@ -9,6 +9,20 @@ from app.core.config import settings
 from app.models.document import Document, DocumentChunk
 from app.core.logging import logger
 
+try:
+    from sentence_transformers import CrossEncoder
+    _reranker = None
+except ImportError:
+    CrossEncoder = None
+
+def get_reranker():
+    global _reranker
+    if CrossEncoder is not None and _reranker is None:
+        logger.info("==> 正在加载 BGE-Reranker 模型，这可能需要一点时间...")
+        # 使用轻量级的基础重排模型
+        _reranker = CrossEncoder('BAAI/bge-reranker-base', max_length=512)
+    return _reranker
+
 # Initialize OpenAI client for SiliconFlow
 openai_client = AsyncOpenAI(
     api_key=settings.LLM_API_KEY,
@@ -78,17 +92,45 @@ class RAGService:
         return db_doc
 
     async def retrieve_relevant_chunks(self, query: str, top_k: int = 3) -> List[DocumentChunk]:
-        """根据 query 检索最相关的 DocumentChunks"""
+        """根据 query 检索最相关的 DocumentChunks (引入 BGE-Reranker 重排)"""
         # 1. 对 query 生成向量
         query_embeddings = await self.get_embeddings([query])
         query_vector = query_embeddings[0]
 
-        # 2. 向量检索 (L2 距离)
-        # <=> 为 cosine distance, <-> 为 L2 distance, <#> 为 inner product
-        # pgvector 推荐标准化后用 cosine distance
+        # 2. 向量初筛 (召回 top_k * 3 个候选片段)
+        recall_k = top_k * 3
         stmt = select(DocumentChunk).order_by(
             DocumentChunk.embedding.cosine_distance(query_vector)
-        ).limit(top_k)
+        ).limit(recall_k)
         
         result = self.db.execute(stmt)
-        return result.scalars().all()
+        candidates = result.scalars().all()
+
+        if not candidates:
+            return []
+
+        # 3. BGE-Reranker 二次重排
+        reranker = get_reranker()
+        if reranker is None:
+            logger.warning("未安装 sentence-transformers 或加载重排模型失败，跳过重排步骤，直接返回初筛结果。")
+            return candidates[:top_k]
+
+        logger.info(f"==> 使用 BGE-Reranker 对 {len(candidates)} 个候选片段进行重排...")
+        # 构造输入对 (query, document_text)
+        pairs = [[query, chunk.content] for chunk in candidates]
+        
+        # 在异步上下文中调用同步的推理模型，推荐使用 run_in_executor 避免阻塞
+        loop = asyncio.get_event_loop()
+        scores = await loop.run_in_executor(None, reranker.predict, pairs)
+        
+        # 将分数绑定到候选片段并按分数降序排序
+        scored_candidates = list(zip(candidates, scores))
+        scored_candidates.sort(key=lambda x: x[1], reverse=True)
+        
+        # 打印一下重排结果的得分供调试
+        for rank, (chunk, score) in enumerate(scored_candidates[:top_k]):
+            logger.info(f"重排 Rank {rank+1} (Score: {score:.4f}): {chunk.content[:30]}...")
+
+        # 4. 返回 Top-K
+        final_chunks = [item[0] for item in scored_candidates[:top_k]]
+        return final_chunks

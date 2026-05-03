@@ -12,5 +12,6 @@ redis>=5.0.0
 celery>=5.3.0
 pgvector>=0.2.5
 langchain-text-splitters>=0.0.1
+sentence-transformers>=2.5.0
 python-multipart>=0.0.9
 prometheus-fastapi-instrumentator>=7.0.0
