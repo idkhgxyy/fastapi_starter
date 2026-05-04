@@ -86,6 +86,13 @@ class RAGService:
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
+    def get_document_by_task_id_for_user(self, *, task_id: str, owner_id: int) -> Optional[Document]:
+        stmt = select(Document).where(
+            Document.processing_task_id == task_id,
+            Document.owner_id == owner_id,
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
     def has_ready_documents(self, *, owner_id: int) -> bool:
         stmt = select(func.count(Document.id)).where(
             Document.owner_id == owner_id,
@@ -116,6 +123,19 @@ class RAGService:
         if task_id:
             document.processing_task_id = task_id
         self.db.commit()
+
+    def requeue_document(self, *, document_id: int, owner_id: int, task_id: str) -> Document:
+        document = self.get_document_for_user(document_id=document_id, owner_id=owner_id)
+        if document is None:
+            raise ValueError(f"Document {document_id} not found for user {owner_id}")
+
+        document.status = DOCUMENT_STATUS_QUEUED
+        document.processing_task_id = task_id
+        document.error_message = None
+        document.chunks_count = 0
+        self.db.commit()
+        self.db.refresh(document)
+        return document
 
     async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """调用 Embedding API 获取向量表示"""

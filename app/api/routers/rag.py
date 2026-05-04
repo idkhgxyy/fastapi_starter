@@ -39,6 +39,7 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="File is empty.")
 
     rag_service = RAGService(db)
+    doc = None
     try:
         doc = rag_service.create_document_record(
             filename=file.filename,
@@ -53,6 +54,8 @@ async def upload_document(
         )
         return doc
     except Exception as e:
+        if doc is not None:
+            rag_service.mark_document_failed(document_id=doc.id, error_message=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to process document: {str(e)}")
 
 

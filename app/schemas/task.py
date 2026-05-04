@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 class TaskBase(BaseModel):
     title: str = Field(..., description="任务标题", max_length=255)
@@ -29,5 +30,4 @@ class TaskOut(TaskBase):
     owner_id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

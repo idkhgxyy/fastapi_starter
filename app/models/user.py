@@ -16,7 +16,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(100), unique=True, index=True)
     full_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     
-    # 密码存入数据库必须哈希处理。今天 Day 5 为了先跑通流程暂时存明文，Day 7 我们会接入哈希算法！
+    # 存储密码哈希值，避免在数据库中保留明文密码。
     hashed_password: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)

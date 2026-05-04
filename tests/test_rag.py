@@ -99,3 +99,57 @@ def test_query_knowledge_base_uses_current_user_scope(client, monkeypatch, db_se
     payload = response.json()
     assert payload["answer"] == "基于当前用户文档的回答"
     assert payload["source_chunks"] == ["只属于当前用户的知识片段"]
+
+
+def test_worker_requeues_owned_document_and_returns_task_status(client, monkeypatch, db_session):
+    token = _create_user_and_login(client, "worker")
+    user_id = int(client.get("/api/users/me", headers={"Authorization": f"Bearer {token}"}).json()["id"])
+
+    document = Document(
+        owner_id=user_id,
+        filename="retry.txt",
+        content="retry me",
+        status=DOCUMENT_STATUS_READY,
+        chunks_count=2,
+    )
+    db_session.add(document)
+    db_session.commit()
+    db_session.refresh(document)
+
+    class DummyTask:
+        id = "task-rag-worker-1"
+
+    class DummyAsyncResult:
+        status = "PROGRESS"
+        info = {"step": "processing_document", "current": 1, "total": 1}
+
+    monkeypatch.setattr(
+        "app.api.routers.worker.process_document_task.delay",
+        lambda document_id: DummyTask(),
+    )
+    monkeypatch.setattr(
+        "app.api.routers.worker.celery_app.AsyncResult",
+        lambda task_id: DummyAsyncResult(),
+    )
+
+    process_response = client.post(
+        "/api/worker/process",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"document_id": document.id},
+    )
+    assert process_response.status_code == 200
+    process_payload = process_response.json()
+    assert process_payload["task_id"] == "task-rag-worker-1"
+    assert process_payload["status"] == DOCUMENT_STATUS_QUEUED
+
+    db_session.expire_all()
+    updated_document = db_session.get(Document, document.id)
+    assert updated_document.processing_task_id == "task-rag-worker-1"
+    assert updated_document.status == DOCUMENT_STATUS_QUEUED
+
+    status_response = client.get(
+        "/api/worker/status/task-rag-worker-1",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert status_response.status_code == 200
+    assert status_response.json()["result"] == {"step": "processing_document", "current": 1, "total": 1}
