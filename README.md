@@ -3,7 +3,7 @@
 一个面向实习 / 校招场景打造的后端工程项目，目标不是“接个模型聊聊天”，而是完整展示：
 
 - 标准后端工程能力：鉴权、数据库设计、接口分层、异常处理、测试
-- AI 应用工程能力：LLM 接入、Tool Calling、RAG 知识库、异步文档处理
+- AI 应用工程能力：LLM 接入、Tool Calling、RAG 知识库、真实异步文档处理
 - 生产可运维能力：Prometheus、Grafana、Request ID、LLM 调用日志、成本统计
 
 ## 项目亮点
@@ -11,10 +11,11 @@
 - `JWT` 用户体系，支持注册、登录、权限校验
 - `Celery + Redis` 支持异步任务处理
 - `Ollama` 本地部署 `qwen2.5:3b` 与 `bge-m3`
-- `RAG` 支持文档上传、切分、向量化、检索问答
+- `RAG` 支持按用户隔离的文档上传、异步切分、向量化、检索问答
 - `Tool Calling` 支持天气查询、任务创建等工具调用
 - `Prometheus + Grafana` 监控请求量、延迟与错误率
 - `LLM Observability` 记录 prompt、response、token、耗时、工具调用链、错误原因
+- `BGE-Reranker` 可选启用二次重排，提升知识库召回结果排序质量
 
 ## 技术栈
 - `FastAPI`
@@ -57,8 +58,10 @@ flowchart LR
 
 ### 3. RAG 知识库
 - 上传 `.txt` 文档
-- 文本切分与向量化
+- 文档按用户隔离存储
+- Celery 异步执行文本切分与向量化
 - 基于 `pgvector` 的相似度检索
+- 可选使用 `BGE-Reranker` 做二次重排
 - 问答结果附带引用片段
 
 ### 4. LLM 能力
@@ -111,6 +114,14 @@ docker compose exec -T ollama ollama pull qwen2.5:3b
 docker compose exec -T ollama ollama pull bge-m3
 ```
 
+## 最近更新
+- 已把知识库文档改为按用户隔离，避免不同用户之间的文档互相污染
+- 已把文档上传改为真实异步处理链路：上传只负责入库和投递任务，Celery Worker 负责切分、Embedding 和写入向量表
+- 已增加文档列表、单文档状态查询和文档重处理接口，便于展示完整处理流程
+- 已补充 RAG 相关自动化测试，并保留可选的 `BGE-Reranker` 重排能力
+
+详细改动见 [changes.md](file:///Users/gxyy/Documents/trae_projects/fastapi_starter/docs/changes.md)
+
 ## 常用访问地址
 - Swagger: `http://localhost:8000/docs`
 - FastAPI Metrics: `http://localhost:8000/metrics`
@@ -154,6 +165,19 @@ curl -X POST "http://localhost:8000/api/rag/upload" \
   -F "file=@sample_knowledge.txt"
 ```
 
+返回示例：
+```json
+{
+  "id": 1,
+  "filename": "sample_knowledge.txt",
+  "status": "queued",
+  "chunks_count": 0,
+  "processing_task_id": "celery-task-id",
+  "error_message": null,
+  "created_at": "2026-05-04T12:00:00"
+}
+```
+
 ### 4. 知识库问答
 ```bash
 curl -X POST "http://localhost:8000/api/rag/query" \
@@ -162,7 +186,21 @@ curl -X POST "http://localhost:8000/api/rag/query" \
   -d '{"query":"这个项目的开发代号是什么？","top_k":2}'
 ```
 
-### 5. LLM 统计接口
+### 5. 查看文档处理状态
+```bash
+curl "http://localhost:8000/api/rag/documents/1" \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+### 6. 重新提交文档处理任务
+```bash
+curl -X POST "http://localhost:8000/api/worker/process" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"document_id":1}'
+```
+
+### 7. LLM 统计接口
 ```bash
 curl "http://localhost:8000/api/observability/llm-stats?days=7" \
   -H "Authorization: Bearer <TOKEN>"
@@ -198,7 +236,7 @@ curl "http://localhost:8000/api/observability/llm-stats?days=7" \
 ## 测试与验证
 ### 运行单元测试
 ```bash
-pytest
+python3 -m pytest -q
 ```
 
 ### 运行 RAG 端到端测试
@@ -228,5 +266,4 @@ docker compose exec api python scripts/eval_llm_observability.py
 - Chat / RAG 改造成流式输出
 - 增加更多 Tool Calling 工具
 - 扩充离线评测集与自动打分
-- 增加 GitHub Actions CI
 - 增加前端页面或 Demo GIF
