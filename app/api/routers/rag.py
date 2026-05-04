@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_active_user
@@ -7,20 +7,26 @@ from app.services.rag_service import RAGService
 from app.services.llm_service import get_llm_client
 from app.core.config import settings
 from app.services.llm_observability_service import create_llm_call_log, elapsed_ms, extract_usage, start_timer
+from app.worker.tasks import process_document_task
 
 router = APIRouter()
 
-@router.post("/upload", response_model=DocumentResponse, summary="上传文档并构建知识库", tags=["RAG"])
+@router.post(
+    "/upload",
+    response_model=DocumentResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="上传文档并异步构建知识库",
+    tags=["RAG"],
+)
 async def upload_document(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_active_user)
+    current_user = Depends(get_current_active_user)
 ):
     """
-    上传 .txt 等纯文本文档。
-    服务会自动进行文本切分、Embedding 计算并存入 PostgreSQL (pgvector)。
+    上传纯文本文档，先保存原始内容，再异步执行切分和向量化。
     """
-    if not file.filename.endswith(".txt"):
+    if not file.filename or not file.filename.endswith(".txt"):
         raise HTTPException(status_code=400, detail="Only .txt files are supported for now.")
     
     content_bytes = await file.read()
@@ -34,15 +40,42 @@ async def upload_document(
 
     rag_service = RAGService(db)
     try:
-        doc = await rag_service.process_document(filename=file.filename, content=content)
-        return {
-            "id": doc.id,
-            "filename": doc.filename,
-            "content": doc.content,
-            "chunks_count": len(doc.chunks)
-        }
+        doc = rag_service.create_document_record(
+            filename=file.filename,
+            content=content,
+            owner_id=current_user.id,
+        )
+        task = process_document_task.delay(doc.id)
+        doc = rag_service.attach_processing_task(
+            document_id=doc.id,
+            owner_id=current_user.id,
+            task_id=task.id,
+        )
+        return doc
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process document: {str(e)}")
+
+
+@router.get("/documents", response_model=list[DocumentResponse], summary="查看当前用户的知识库文档", tags=["RAG"])
+async def list_documents(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)
+):
+    rag_service = RAGService(db)
+    return rag_service.list_documents_for_user(owner_id=current_user.id)
+
+
+@router.get("/documents/{document_id}", response_model=DocumentResponse, summary="查看文档处理状态", tags=["RAG"])
+async def get_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)
+):
+    rag_service = RAGService(db)
+    document = rag_service.get_document_for_user(document_id=document_id, owner_id=current_user.id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    return document
 
 
 @router.post("/query", response_model=RAGQueryResponse, summary="基于知识库检索并回答", tags=["RAG"])
@@ -62,13 +95,16 @@ async def query_knowledge_base(
     rag_service = RAGService(db)
     started_at = start_timer()
     try:
-        # 1 & 2: 向量化并检索
-        chunks = await rag_service.retrieve_relevant_chunks(request.query, request.top_k)
+        chunks = await rag_service.retrieve_relevant_chunks(
+            query=request.query,
+            owner_id=current_user.id,
+            top_k=request.top_k,
+        )
         
         if not chunks:
             return RAGQueryResponse(
                 query=request.query,
-                answer="知识库中没有找到相关信息。",
+                answer="知识库中暂无已处理完成的相关文档，请先上传文档并等待处理完成。",
                 source_chunks=[]
             )
         

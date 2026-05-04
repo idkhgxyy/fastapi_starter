@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.main import app
@@ -54,3 +54,12 @@ def client(setup_database):
     """
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture()
+def db_session(setup_database):
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
