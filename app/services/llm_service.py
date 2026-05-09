@@ -1,5 +1,7 @@
 from openai import AsyncOpenAI
 import json
+import os
+import psutil
 from app.core.config import settings
 from app.core.logging import logger
 from sqlalchemy.orm import Session
@@ -26,7 +28,7 @@ def get_llm_client() -> AsyncOpenAI:
     return client
 
 # ==========================================
-# 1. 定义本地工具函数 (模拟查询天气)
+# 1. 定义本地工具函数 (模拟查询天气与系统状态)
 # ==========================================
 def get_current_weather(location: str) -> str:
     """模拟天气查询函数，实际中这里可以调用外部天气 API"""
@@ -39,6 +41,24 @@ def get_current_weather(location: str) -> str:
     }
     # 默认返回
     return weather_data.get(location, f"{location} 天气未知，气温大约 20°C")
+
+def get_system_status() -> str:
+    """查询服务器当前的系统负载、内存与磁盘占用状态"""
+    logger.info("==> 执行本地工具: 查询系统状态")
+    try:
+        cpu_percent = psutil.cpu_percent(interval=0.5)
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        
+        status_info = (
+            f"【CPU 使用率】: {cpu_percent}%\n"
+            f"【内存使用率】: {memory.percent}% (已用: {memory.used / (1024**3):.2f}GB, 总计: {memory.total / (1024**3):.2f}GB)\n"
+            f"【磁盘使用率】: {disk.percent}% (已用: {disk.used / (1024**3):.2f}GB, 总计: {disk.total / (1024**3):.2f}GB)"
+        )
+        return status_info
+    except Exception as e:
+        logger.error(f"获取系统状态失败: {e}")
+        return "无法获取系统状态信息。"
 
 # ==========================================
 # 2. 定义告诉大模型的工具 Schema (JSON Schema)
@@ -83,6 +103,19 @@ CREATE_TASK_TOOL = {
     }
 }
 
+SYSTEM_STATUS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_system_status",
+        "description": "获取当前服务器的系统状态，包括 CPU 使用率、内存占用以及磁盘使用情况。如果用户询问服务器是否健康、负载高不高、系统状态等，请调用此工具。",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    }
+}
+
 async def generate_chat_reply(message: str, db: Session = None, current_user_id: int = None) -> str:
     """
     调用大语言模型生成回复 (带 Tool Calling 支持)
@@ -119,7 +152,7 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
         response = await llm_client.chat.completions.create(
             model=settings.LLM_MODEL_NAME,
             messages=messages,
-            tools=[WEATHER_TOOL, CREATE_TASK_TOOL],  # 注入多个工具
+            tools=[WEATHER_TOOL, CREATE_TASK_TOOL, SYSTEM_STATUS_TOOL],  # 注入多个工具
             tool_choice="auto",
             temperature=0.1,  # 降低温度，减少乱码概率，提高指令遵循
             max_tokens=1000
@@ -158,6 +191,9 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
                         tool_result = f"任务创建成功！任务ID: {created_task.id}, 标题: {created_task.title}"
                     else:
                         tool_result = "任务创建失败：未获取到数据库连接或用户登录状态。"
+                
+                elif function_name == "get_system_status":
+                    tool_result = get_system_status()
                 
                 # 将工具的执行结果追加到上下文中
                 messages.append({

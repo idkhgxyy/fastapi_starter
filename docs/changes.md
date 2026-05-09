@@ -71,3 +71,10 @@
   - 新增 `app/static/demo.html`，采用 TailwindCSS 构建，支持深色模式。
   - 在 `app/main.py` 中通过 `StaticFiles` 挂载静态目录，可通过 `http://localhost:8000/demo.html` 访问。
   - 页面集成了 JWT Token 认证配置、RAG 知识库上传与状态轮询、以及 AI 聊天对话功能。
+
+### Agent 工具扩展：系统状态查询
+- 目标：让 Agent 具备更强的系统可观测性与运维查询能力，体现真正的 Backend Tool Calling。
+- 主要改动：
+  - 在 `requirements.txt` 中引入 `psutil` 依赖，并执行安装。
+  - 在 `app/services/llm_service.py` 中新增 `get_system_status` 本地工具函数，可获取 CPU、内存及磁盘的真实负载情况。
+  - 新增 `SYSTEM_STATUS_TOOL` JSON Schema 并在大模型调用中注入该工具，实现自然语言查询服务器状态。
