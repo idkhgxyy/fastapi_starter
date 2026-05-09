@@ -22,5 +22,20 @@ class UserOut(UserBase):
     id: int
     is_active: bool = True
     is_superuser: bool = False
+    
+    # 返回给客户端的配置，这里不返回 encrypted_api_key，而是返回是否已配置
+    llm_provider: Optional[str] = None
+    llm_base_url: Optional[str] = None
+    llm_model_name: Optional[str] = None
+    has_custom_llm_key: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+class UserLLMConfigUpdate(BaseModel):
+    """
+    用户更新自定义 LLM 配置
+    """
+    llm_provider: Optional[str] = Field(None, description="LLM 服务商")
+    llm_base_url: Optional[str] = Field(None, description="LLM Base URL")
+    llm_model_name: Optional[str] = Field(None, description="LLM 模型名称")
+    llm_api_key: Optional[str] = Field(None, description="LLM API Key (明文，入库时会被加密)")

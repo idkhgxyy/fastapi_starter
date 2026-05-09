@@ -20,3 +20,13 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # 用户级 LLM 配置 (可选，支持多租户独立 LLM)
+    llm_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    llm_base_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    llm_model_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    llm_api_key_encrypted: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    @property
+    def has_custom_llm_key(self) -> bool:
+        return bool(self.llm_api_key_encrypted)

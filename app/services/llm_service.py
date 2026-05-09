@@ -15,17 +15,38 @@ from app.services.llm_observability_service import (
     start_timer,
 )
 
-# 全局复用一个 AsyncOpenAI 客户端
-client = None
+from app.models.user import User
+from app.utils.encryption import decrypt_api_key
 
-def get_llm_client() -> AsyncOpenAI:
-    global client
-    if client is None:
+# 全局复用一个 AsyncOpenAI 客户端 (针对未配置自有 Key 的情况)
+_global_client = None
+
+def get_llm_client(user: User = None) -> tuple[AsyncOpenAI, str]:
+    """
+    动态获取 LLM 客户端和模型名称。
+    优先使用用户自定义的配置（支持多租户独立 Key），若用户未配置，则回退到系统全局配置。
+    返回 (client, model_name)
+    """
+    if user and user.has_custom_llm_key:
+        # 用户有自定义配置，使用用户的
+        api_key = decrypt_api_key(user.llm_api_key_encrypted)
+        base_url = user.llm_base_url or settings.LLM_BASE_URL
+        model_name = user.llm_model_name or settings.LLM_MODEL_NAME
+        
         client = AsyncOpenAI(
-            api_key=settings.LLM_API_KEY,
-            base_url=settings.LLM_BASE_URL,
+            api_key=api_key,
+            base_url=base_url,
         )
-    return client
+        return client, model_name
+    else:
+        # 使用全局配置
+        global _global_client
+        if _global_client is None:
+            _global_client = AsyncOpenAI(
+                api_key=settings.LLM_API_KEY,
+                base_url=settings.LLM_BASE_URL,
+            )
+        return _global_client, settings.LLM_MODEL_NAME
 
 # ==========================================
 # 1. 定义本地工具函数 (模拟查询天气与系统状态)
@@ -120,10 +141,14 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
     """
     调用大语言模型生成回复 (带 Tool Calling 支持)
     """
-    if not settings.LLM_API_KEY:
-        return "【系统提示】大模型 API Key 尚未配置，请在 .env 中设置 LLM_API_KEY。"
+    user = db.get(User, current_user_id) if db and current_user_id else None
+    
+    # 动态获取客户端和模型名称
+    llm_client, model_name = get_llm_client(user)
+    
+    if not llm_client.api_key:
+        return "【系统提示】大模型 API Key 尚未配置，请在系统或个人设置中配置。"
 
-    llm_client = get_llm_client()
     started_at = start_timer()
     
     # 初始对话上下文
@@ -150,7 +175,7 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
         messages[0]["content"] = system_prompt
 
         response = await llm_client.chat.completions.create(
-            model=settings.LLM_MODEL_NAME,
+            model=model_name,
             messages=messages,
             tools=[WEATHER_TOOL, CREATE_TASK_TOOL, SYSTEM_STATUS_TOOL],  # 注入多个工具
             tool_choice="auto",
@@ -206,7 +231,7 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
             # 第二轮调用
             logger.info("==> [Round 2] 工具结果已返回，正在请求大模型生成最终回答...")
             second_response = await llm_client.chat.completions.create(
-                model=settings.LLM_MODEL_NAME,
+                model=model_name,
                 messages=messages,
                 temperature=0.7,
                 max_tokens=1000
@@ -275,11 +300,13 @@ async def generate_chat_reply_stream(message: str, db: Session = None, current_u
     流式调用大语言模型生成回复 (SSE)。不支持 Tool Calling，如果需要 Tool Calling 建议先判断。
     这里为了演示，提供最基础的流式输出支持。
     """
-    if not settings.LLM_API_KEY:
+    user = db.get(User, current_user_id) if db and current_user_id else None
+    llm_client, model_name = get_llm_client(user)
+    
+    if not llm_client.api_key:
         yield "data: {\"error\": \"API Key 未配置\"}\n\n"
         return
 
-    llm_client = get_llm_client()
     messages = [
         {"role": "system", "content": "你是一个有用的 AI 助手。"},
         {"role": "user", "content": message}
@@ -287,7 +314,7 @@ async def generate_chat_reply_stream(message: str, db: Session = None, current_u
     
     try:
         response = await llm_client.chat.completions.create(
-            model=settings.LLM_MODEL_NAME,
+            model=model_name,
             messages=messages,
             temperature=0.7,
             stream=True

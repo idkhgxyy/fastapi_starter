@@ -2,11 +2,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from fastapi import status
 
-from app.schemas.user import UserCreate
+from app.schemas.user import UserCreate, UserLLMConfigUpdate
 from app.models.user import User
 from app.utils.errors import AppException
 from app.core.logging import logger
 from app.core.security import get_password_hash
+from app.utils.encryption import encrypt_api_key
 
 class UserService:
     """
@@ -83,4 +84,31 @@ class UserService:
         db.delete(user)
         db.commit()
         logger.info(f"User deleted successfully. ID: {user_id}")
+        return user
+
+    @classmethod
+    def update_llm_config(cls, db: Session, user_id: int, config_in: UserLLMConfigUpdate) -> User:
+        logger.info(f"Attempting to update LLM config for user ID: {user_id}")
+        user = db.get(User, user_id)
+        if not user:
+            raise AppException(
+                code=1002, 
+                msg="User not found", 
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+            
+        if config_in.llm_provider is not None:
+            user.llm_provider = config_in.llm_provider
+        if config_in.llm_base_url is not None:
+            user.llm_base_url = config_in.llm_base_url
+        if config_in.llm_model_name is not None:
+            user.llm_model_name = config_in.llm_model_name
+        if config_in.llm_api_key is not None:
+            if config_in.llm_api_key.strip() == "":
+                user.llm_api_key_encrypted = None
+            else:
+                user.llm_api_key_encrypted = encrypt_api_key(config_in.llm_api_key)
+                
+        db.commit()
+        db.refresh(user)
         return user

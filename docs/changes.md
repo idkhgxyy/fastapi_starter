@@ -86,3 +86,11 @@
   - 修改 `app/schemas/chat.py` 和 `app/services/llm_service.py`，新增 `generate_chat_reply_stream` 支持真正的 SSE 流式输出，客户端可传入 `stream=True` 获取流式响应。
   - 扩充了 `scripts/eval_llm_observability.py` 离线评测集，增加了对“系统状态查询”、“工具组合”及“拒绝不合理要求”等复杂指令的自动化评测。
   - 补充了 `tests/test_chat_advanced.py`，使用 `unittest.mock` 对限流规则与 SSE 流式返回格式进行了自动化单元测试。
+
+### 架构演进：多租户 LLM 自定义配置 (BYOK)
+- 目标：将项目升级为商业级 SaaS 架构，允许不同租户在前端独立配置自己的大模型服务商及 API Key，并提供加密存储保障安全。
+- 主要改动：
+  - 引入 `cryptography` 依赖，并在 `app/utils/encryption.py` 中基于项目 `SECRET_KEY` 派生出 Fernet 密钥对用户输入的 API Key 进行对称加解密。
+  - 修改 `User` 模型与数据库表（通过 Alembic 生成并执行了新迁移），新增 `llm_provider`、`llm_base_url`、`llm_model_name` 及 `llm_api_key_encrypted` 字段。
+  - 在 `app/api/routers/users.py` 新增了 `PUT /me/llm-config` 接口，并在前端 `demo.html` 页面增加了「模型配置」模态框面板，供用户动态切换 OpenAI、DeepSeek 等兼容大模型。
+  - 重构了 `llm_service.py` 中的 `get_llm_client` 方法，实现对当前登录用户的个性化配置读取，未配置时则优雅降级为系统全局 LLM 配置。

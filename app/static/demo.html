@@ -47,7 +47,8 @@
             <div id="auth-status" class="flex items-center gap-2 text-sm text-red-500">
                 <span class="w-2 h-2 rounded-full bg-red-500"></span> 未认证
             </div>
-            <button onclick="toggleAuthModal()" class="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors border border-gray-300 dark:border-gray-600">设置 Token</button>
+            <button onclick="toggleAuthModal()" class="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors border border-gray-300 dark:border-gray-600">账号登录</button>
+            <button onclick="toggleConfigModal()" id="config-btn" class="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors border border-gray-300 dark:border-gray-600 hidden">模型配置</button>
         </div>
     </header>
 
@@ -108,12 +109,43 @@
     <!-- Auth Modal -->
     <div id="auth-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center hidden z-50">
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-200 dark:border-gray-700 transform transition-all">
-            <h2 class="text-xl font-bold mb-4">设置认证 Token</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">请输入通过 /api/auth/login 获取的 Bearer Token。</p>
+            <h2 class="text-xl font-bold mb-4">登录系统</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">请输入邮箱和密码，或者直接输入现有的 Token。</p>
+            
+            <input type="text" id="email-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="Email (如: admin@example.com)">
+            <input type="password" id="password-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-4 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="Password">
+            
+            <div class="text-xs text-gray-400 text-center mb-4">-- 或者直接填 Token --</div>
             <input type="password" id="token-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-6 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="eyJh...">
+            
             <div class="flex justify-end gap-3">
                 <button onclick="toggleAuthModal()" class="px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">取消</button>
-                <button onclick="saveToken()" class="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors">保存配置</button>
+                <button onclick="loginOrSaveToken()" class="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors">登录 / 保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LLM Config Modal -->
+    <div id="config-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-200 dark:border-gray-700 transform transition-all">
+            <h2 class="text-xl font-bold mb-4">自定义大模型配置</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">您可以配置自己的 API Key，如果不填则使用系统默认配置。API Key 会加密存储。</p>
+            
+            <label class="block text-xs text-gray-500 mb-1">LLM Provider</label>
+            <input type="text" id="llm-provider" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="例如: deepseek, openai, aliyun">
+            
+            <label class="block text-xs text-gray-500 mb-1">Base URL</label>
+            <input type="text" id="llm-base-url" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="例如: https://api.deepseek.com/v1">
+            
+            <label class="block text-xs text-gray-500 mb-1">Model Name</label>
+            <input type="text" id="llm-model-name" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="例如: deepseek-v4-pro">
+            
+            <label class="block text-xs text-gray-500 mb-1">API Key</label>
+            <input type="password" id="llm-api-key" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-6 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="输入新的 API Key (留空表示不修改)">
+            
+            <div class="flex justify-end gap-3">
+                <button onclick="toggleConfigModal()" class="px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">取消</button>
+                <button onclick="saveLLMConfig()" class="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors">保存配置</button>
             </div>
         </div>
     </div>
@@ -129,30 +161,111 @@
             if(token) fetchDocuments();
         });
 
-        // Auth
+        // Auth & Config
         function toggleAuthModal() {
             const modal = document.getElementById('auth-modal');
             modal.classList.toggle('hidden');
-            if(!modal.classList.contains('hidden')) {
-                document.getElementById('token-input').value = token;
-                document.getElementById('token-input').focus();
+        }
+        
+        function toggleConfigModal() {
+            const modal = document.getElementById('config-modal');
+            modal.classList.toggle('hidden');
+            if(!modal.classList.contains('hidden') && token) {
+                // Fetch current config
+                fetch('/api/users/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }).then(res => res.json()).then(data => {
+                    document.getElementById('llm-provider').value = data.llm_provider || '';
+                    document.getElementById('llm-base-url').value = data.llm_base_url || '';
+                    document.getElementById('llm-model-name').value = data.llm_model_name || '';
+                    document.getElementById('llm-api-key').placeholder = data.has_custom_llm_key ? "已配置自定义 Key (留空不修改)" : "输入新的 API Key";
+                });
             }
         }
 
-        function saveToken() {
-            token = document.getElementById('token-input').value.trim();
-            localStorage.setItem('agent_token', token);
-            updateAuthStatus();
-            toggleAuthModal();
-            fetchDocuments();
+        async function loginOrSaveToken() {
+            const email = document.getElementById('email-input').value.trim();
+            const pwd = document.getElementById('password-input').value.trim();
+            const manualToken = document.getElementById('token-input').value.trim();
+            
+            if (manualToken) {
+                token = manualToken;
+                localStorage.setItem('agent_token', token);
+                updateAuthStatus();
+                toggleAuthModal();
+                fetchDocuments();
+                return;
+            }
+            
+            if (email && pwd) {
+                try {
+                    const formData = new URLSearchParams();
+                    formData.append('username', email);
+                    formData.append('password', pwd);
+                    
+                    const res = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: formData
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        token = data.access_token;
+                        localStorage.setItem('agent_token', token);
+                        updateAuthStatus();
+                        toggleAuthModal();
+                        fetchDocuments();
+                    } else {
+                        alert('登录失败，请检查账号密码');
+                    }
+                } catch(e) {
+                    alert('登录请求出错');
+                }
+            }
+        }
+
+        async function saveLLMConfig() {
+            if (!token) return alert('请先登录');
+            const provider = document.getElementById('llm-provider').value.trim();
+            const baseUrl = document.getElementById('llm-base-url').value.trim();
+            const modelName = document.getElementById('llm-model-name').value.trim();
+            const apiKey = document.getElementById('llm-api-key').value.trim();
+            
+            const payload = {};
+            if (provider) payload.llm_provider = provider;
+            if (baseUrl) payload.llm_base_url = baseUrl;
+            if (modelName) payload.llm_model_name = modelName;
+            if (apiKey) payload.llm_api_key = apiKey;
+
+            try {
+                const res = await fetch('/api/users/me/llm-config', {
+                    method: 'PUT',
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    alert('大模型配置保存成功！');
+                    toggleConfigModal();
+                } else {
+                    alert('保存失败');
+                }
+            } catch(e) {
+                alert('保存出错');
+            }
         }
 
         function updateAuthStatus() {
             const statusDiv = document.getElementById('auth-status');
+            const configBtn = document.getElementById('config-btn');
             if (token) {
                 statusDiv.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500"></span> <span class="text-green-600 dark:text-green-400">已认证</span>`;
+                configBtn.classList.remove('hidden');
             } else {
                 statusDiv.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500"></span> 未认证`;
+                configBtn.classList.add('hidden');
             }
         }
 

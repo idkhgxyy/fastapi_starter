@@ -2,7 +2,7 @@ from fastapi import APIRouter, status, Depends
 from typing import List
 from sqlalchemy.orm import Session
 
-from app.schemas.user import UserCreate, UserOut
+from app.schemas.user import UserCreate, UserOut, UserLLMConfigUpdate
 from app.services.user_service import UserService
 from app.api.deps import get_db, get_current_user, get_current_active_superuser
 from app.models.user import User
@@ -23,6 +23,18 @@ async def get_user_me(current_user: User = Depends(get_current_user)):
     必须在请求头带上有效的 Authorization: Bearer <Token> 才能访问。
     """
     return current_user
+
+@router.put("/me/llm-config", response_model=UserOut, summary="更新当前用户的 LLM 配置")
+async def update_user_llm_config(
+    config_in: UserLLMConfigUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    更新用户自己的大模型服务商配置 (支持多租户独立配置)。
+    API Key 将会被对称加密后入库，确保安全性。
+    """
+    return UserService.update_llm_config(db, current_user.id, config_in)
 
 @router.get("/{user_id}", response_model=UserOut, summary="获取指定用户详情")
 async def get_user(user_id: int, db: Session = Depends(get_db)):
