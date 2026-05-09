@@ -265,7 +265,44 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
                 completion_tokens=total_completion_tokens,
                 total_tokens=total_tokens,
                 latency_ms=elapsed_ms(started_at),
-                status="failed",
-                error_message=str(e),
-            )
+                    status="failed",
+                    error_message=str(e),
+                )
         return f"【系统提示】模型调用失败，请检查网络或 API 配置。错误详情: {str(e)}"
+
+async def generate_chat_reply_stream(message: str, db: Session = None, current_user_id: int = None):
+    """
+    流式调用大语言模型生成回复 (SSE)。不支持 Tool Calling，如果需要 Tool Calling 建议先判断。
+    这里为了演示，提供最基础的流式输出支持。
+    """
+    if not settings.LLM_API_KEY:
+        yield "data: {\"error\": \"API Key 未配置\"}\n\n"
+        return
+
+    llm_client = get_llm_client()
+    messages = [
+        {"role": "system", "content": "你是一个有用的 AI 助手。"},
+        {"role": "user", "content": message}
+    ]
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model=settings.LLM_MODEL_NAME,
+            messages=messages,
+            temperature=0.7,
+            stream=True
+        )
+        
+        async for chunk in response:
+            if chunk.choices and chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+                # 按照 SSE 规范格式化数据
+                data = json.dumps({"content": content}, ensure_ascii=False)
+                yield f"data: {data}\n\n"
+                
+        yield "data: [DONE]\n\n"
+        
+    except Exception as e:
+        logger.error(f"LLM Stream 调用失败: {str(e)}")
+        data = json.dumps({"error": str(e)}, ensure_ascii=False)
+        yield f"data: {data}\n\n"

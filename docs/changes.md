@@ -78,3 +78,11 @@
   - 在 `requirements.txt` 中引入 `psutil` 依赖，并执行安装。
   - 在 `app/services/llm_service.py` 中新增 `get_system_status` 本地工具函数，可获取 CPU、内存及磁盘的真实负载情况。
   - 新增 `SYSTEM_STATUS_TOOL` JSON Schema 并在大模型调用中注入该工具，实现自然语言查询服务器状态。
+
+### 评测与工程化：限流、SSE及离线评测扩充
+- 目标：完善系统的流式输出能力、接口限流保护以及离线评测集，证明系统的健壮性和可观测性。
+- 主要改动：
+  - 在 `app/utils/rate_limit.py` 中基于 Redis ZSET 实现滑动窗口限流器，并在 `app/api/routers/chat.py` 中为聊天接口挂载了 `60 秒内 20 次请求` 的限制。
+  - 修改 `app/schemas/chat.py` 和 `app/services/llm_service.py`，新增 `generate_chat_reply_stream` 支持真正的 SSE 流式输出，客户端可传入 `stream=True` 获取流式响应。
+  - 扩充了 `scripts/eval_llm_observability.py` 离线评测集，增加了对“系统状态查询”、“工具组合”及“拒绝不合理要求”等复杂指令的自动化评测。
+  - 补充了 `tests/test_chat_advanced.py`，使用 `unittest.mock` 对限流规则与 SSE 流式返回格式进行了自动化单元测试。
