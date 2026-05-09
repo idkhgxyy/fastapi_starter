@@ -91,6 +91,8 @@ tests/          # Pytest 测试
 scripts/        # 初始化脚本、评测脚本
 ```
 
+> **详细的模块架构与类说明，请参考 [CODE_WIKI.md](docs/CODE_WIKI.md)**
+
 ## 一键启动
 ### 方式一：推荐
 ```bash
@@ -132,15 +134,16 @@ Grafana 默认账号密码：
 - 用户名：`admin`
 - 密码：`admin`
 
-## Demo 展示建议
-建议你后续在仓库中补一个 `docs/images/` 目录，并放入下面这些截图或 GIF：
+## 界面展示
 
-- `swagger-overview.png`：Swagger 首页与接口列表
-- `rag-query-demo.png`：上传文档后进行知识库问答的结果
-- `grafana-dashboard.png`：Grafana 看板中展示请求量 / 延迟 / 错误率
-- `tool-calling-task.gif`：通过聊天接口触发任务创建的完整过程
+### 1. 前端对话与知识库问答 (RAG)
+![RAG Query Demo](docs/images/rag-query-demo.png)
 
-如果你准备投递实习，这几张图会比单纯的代码仓库更有说服力。
+### 2. Swagger 接口文档 (深色模式)
+![Swagger Overview](docs/images/swagger-overview.png)
+
+### 3. Grafana 监控大盘
+![Grafana Dashboard](docs/images/grafana-dashboard.png)
 
 ## 关键接口示例
 ### 1. 登录
@@ -267,3 +270,8 @@ docker compose exec api python scripts/eval_llm_observability.py
 - 增加更多 Tool Calling 工具
 - 扩充离线评测集与自动打分
 - 增加前端页面或 Demo GIF
+
+## 维护约定
+- 每次一轮实质性代码改动后，必须同步更新 `README.md`
+- 每次都要在 `docs/changes.md` 追加一条记录，至少写明：目标、主要改动、验证方式、对应提交
+- **AI 辅助开发**：本项目根目录包含 `CLAUDE.md` 文件，作为 AI Agent（如 Claude, Trae 等）的全局编码约束。使用 AI 辅助开发时，请确保 AI 工具已阅读并遵循该文件规范。

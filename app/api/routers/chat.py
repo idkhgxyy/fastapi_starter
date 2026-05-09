@@ -1,17 +1,13 @@
 from fastapi import APIRouter, Depends
-from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.schemas.chat import ChatRequest, ChatResponse
-from app.services.llm_service import generate_chat_reply, generate_chat_reply_stream
+from app.services.llm_service import generate_chat_reply
 from app.models.user import User
-from app.api.deps import get_current_user, get_db, RateLimiter
+from app.api.deps import get_current_user, get_db
 
 router = APIRouter()
 
-# 限流：每分钟最多 10 次对话请求
-chat_rate_limiter = RateLimiter(times=10, seconds=60)
-
-@router.post("/", response_model=ChatResponse, summary="与 AI 进行对话", dependencies=[Depends(chat_rate_limiter)])
+@router.post("/", response_model=ChatResponse, summary="与 AI 进行对话")
 async def chat_with_ai(
     request: ChatRequest,
     db: Session = Depends(get_db),
@@ -27,21 +23,3 @@ async def chat_with_ai(
         current_user_id=current_user.id
     )
     return ChatResponse(reply=reply)
-
-@router.post("/stream", summary="与 AI 进行对话 (流式返回)", dependencies=[Depends(chat_rate_limiter)])
-async def chat_with_ai_stream(
-    request: ChatRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    流式对话接口 (Server-Sent Events)
-    """
-    return StreamingResponse(
-        generate_chat_reply_stream(
-            message=request.message,
-            db=db,
-            current_user_id=current_user.id
-        ),
-        media_type="text/event-stream"
-    )

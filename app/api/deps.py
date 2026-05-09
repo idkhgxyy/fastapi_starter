@@ -10,18 +10,9 @@ from app.core.config import settings
 from app.schemas.auth import TokenPayload
 from app.models.user import User
 from app.utils.errors import AppException
-import redis.asyncio as redis_async
 
 # OAuth2 配置，指明了客户端应该去哪个 URL 换取 Token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
-
-redis_client = None
-
-async def get_redis() -> redis_async.Redis:
-    global redis_client
-    if redis_client is None:
-        redis_client = redis_async.from_url(settings.REDIS_URL, decode_responses=True)
-    return redis_client
 
 def get_db() -> Generator:
     """
@@ -97,28 +88,3 @@ def get_current_active_superuser(
             status_code=status.HTTP_403_FORBIDDEN
         )
     return current_user
-
-class RateLimiter:
-    """
-    基于 Redis 的简单接口限流依赖
-    """
-    def __init__(self, times: int, seconds: int):
-        self.times = times
-        self.seconds = seconds
-
-    async def __call__(
-        self, 
-        current_user: User = Depends(get_current_user), 
-        redis_client: redis_async.Redis = Depends(get_redis)
-    ):
-        key = f"rate_limit:user:{current_user.id}"
-        current = await redis_client.incr(key)
-        if current == 1:
-            await redis_client.expire(key, self.seconds)
-        if current > self.times:
-            raise AppException(
-                code=1008,
-                msg=f"请求过于频繁，请 {self.seconds} 秒后再试。",
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS
-            )
-        return True

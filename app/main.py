@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from sqlalchemy import text
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -145,5 +146,13 @@ async def root():
     logger.info("Root endpoint accessed.")
     return {
         "message": "Welcome to FastAPI Starter. Visit /docs for API documentation.",
-        "docs_url": "/docs"
+        "docs_url": "/docs",
+        "demo_url": "/demo.html"
     }
+
+# 挂载静态文件目录 (用于前端 Demo)
+import os
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_dir):
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
