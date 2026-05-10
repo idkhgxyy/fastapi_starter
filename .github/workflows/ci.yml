@@ -48,5 +48,7 @@ jobs:
       - name: Run tests
         env:
           REDIS_URL: redis://localhost:6379/0
+          DATABASE_URL: sqlite:///:memory:
+          SECRET_KEY: replace_with_a_long_random_secret_key
         run: |
           python -m pytest -q
