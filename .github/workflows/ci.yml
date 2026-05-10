@@ -45,5 +45,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run tests
+        env:
+          REDIS_URL: redis://localhost:6379/0
         run: |
           python -m pytest -q
