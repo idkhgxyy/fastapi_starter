@@ -48,3 +48,4 @@ def test_user_llm_config(client):
     assert updated_data["llm_model_name"] == "gpt-4o"
     assert updated_data["has_custom_llm_key"] is True
     assert "llm_api_key" not in updated_data  # Should not expose raw key
+    assert "llm_api_key_encrypted" not in updated_data # Should not expose encrypted key either
