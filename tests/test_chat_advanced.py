@@ -44,11 +44,19 @@ def test_chat_rate_limiting(client):
 
 def test_chat_sse_stream(client):
     # 测试 SSE 接口的 Header 和流式格式
-    # 同样先拿到 Token
+    # 为避免受上一个限流测试的影响，使用另一个新用户
+    client.post(
+        "/api/users/",
+        json={
+            "username": "sse_user",
+            "email": "sse@example.com",
+            "password": "password123"
+        },
+    )
     login_resp = client.post(
         "/api/auth/login",
         data={
-            "username": "ratelimit@example.com",
+            "username": "sse@example.com",
             "password": "password123"
         },
     )
