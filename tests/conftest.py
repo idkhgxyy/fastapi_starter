@@ -15,7 +15,7 @@ from app.api.deps import get_db
 DEFAULT_SQLITE_URL = "sqlite:///:memory:"
 DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_SQLITE_URL)
 
-USING_POSTGRES = DATABASE_URL.startswith("postgresql://")
+USING_POSTGRES = DATABASE_URL.startswith("postgresql")
 
 if USING_POSTGRES:
     engine = create_engine(DATABASE_URL)
