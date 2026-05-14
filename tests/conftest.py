@@ -1,7 +1,6 @@
 import sys
 import os
 
-# 将项目根目录添加到 sys.path 中，让 pytest 能找到 app 包
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pytest
@@ -13,17 +12,21 @@ from app.main import app
 from app.db.base import Base
 from app.api.deps import get_db
 
-# 1. 设置一个专门用于测试的 SQLite 内存数据库，避免污染你的 PostgreSQL 真实数据
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+DEFAULT_SQLITE_URL = "sqlite:///:memory:"
+DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_SQLITE_URL)
 
-# connect_args={"check_same_thread": False} 是 SQLite 必需的配置
-from sqlalchemy.pool import StaticPool
+USING_POSTGRES = DATABASE_URL.startswith("postgresql://")
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, 
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool
-)
+if USING_POSTGRES:
+    engine = create_engine(DATABASE_URL)
+else:
+    from sqlalchemy.pool import StaticPool
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # 2. 覆盖 FastAPI 的依赖项 (Dependency Override)

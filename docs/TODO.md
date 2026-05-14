@@ -51,18 +51,19 @@
   - 已完成：配置 `swagger_ui_init_oauth`，Swagger Authorize 弹窗直接填写邮箱密码即可自动获取Token
   - 面试价值：面试官打开 Swagger 就能直接测试所有接口
 
-- [ ] **增加架构图和 Demo 动图到 README**
+- [ ] **增加架构图和 Demo 动图到 README** ~~(已跳过)~~
   - README 中已有 mermaid 架构图和几张截图，但缺少操作演示 GIF
   - 建议：录制一条完整的"上传文档 → 等待处理 → 知识库问答 → Agent 创建任务"操作链路的 GIF（需手动录制）
   - 面试价值：HR 和面试官第一眼就能看懂的 Demo 比代码更有说服力
+  - ⚠️ 用户选择跳过，当前 demo.html 已具备完整交互能力，面试官可直接在浏览器体验
 
 ---
 
 ### 🟡 第二优先：工程健壮类（证明你具备生产级项目的思维）
 
-- [ ] **CI 流水线增强**
-  - 当前 GitHub Actions 仅跑 `pytest`，未验证 Docker 构建和 PostgreSQL 兼容性
-  - 建议：增加 `docker build` 步骤 + 用 `service container` 启动 PostgreSQL 跑集成测试 + pytest-cov 覆盖率上报
+- [x] **CI 流水线增强** ✅ (2026-05-14)
+  - ~~当前 GitHub Actions 仅跑 pytest，未验证 Docker 构建和 PostgreSQL 兼容性~~
+  - 已完成：增加 `pgvector/pgvector:pg15` PostgreSQL service container 跑真实集成测试；独立 `docker-build` job 验证 Docker 构建；`pytest-cov` 覆盖率上报 + `coverage.xml` artifact 上传；`conftest.py` 支持 SQLite/PostgreSQL 双模式自动切换
   - 面试价值：展示 CI/CD 实践能力
 
 - [ ] **修复 Ollama 容器健康检查**
