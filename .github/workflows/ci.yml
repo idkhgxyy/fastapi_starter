@@ -64,7 +64,7 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           SECRET_KEY: replace_with_a_long_random_secret_key
         run: |
-          python -m pytest -q --cov=app --cov-report=term-missing --cov-report=xml
+          python -m pytest tests/ -q --cov=app --cov-report=term-missing --cov-report=xml
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
