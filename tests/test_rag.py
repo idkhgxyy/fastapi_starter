@@ -45,12 +45,14 @@ def test_upload_document_creates_async_job(client, monkeypatch, db_session):
     assert payload["status"] == DOCUMENT_STATUS_QUEUED
     assert payload["processing_task_id"] == "task-rag-upload-1"
     assert payload["chunks_count"] == 0
+    assert payload["file_type"] == "txt"
 
     document = db_session.get(Document, payload["id"])
     assert document is not None
     assert document.status == DOCUMENT_STATUS_QUEUED
     assert document.processing_task_id == "task-rag-upload-1"
     assert document.owner_id is not None
+    assert document.file_type == "txt"
 
 
 def test_query_knowledge_base_uses_current_user_scope(client, monkeypatch, db_session):
@@ -153,3 +155,101 @@ def test_worker_requeues_owned_document_and_returns_task_status(client, monkeypa
     )
     assert status_response.status_code == 200
     assert status_response.json()["result"] == {"step": "processing_document", "current": 1, "total": 1}
+
+
+def test_upload_md_document(client, monkeypatch, db_session):
+    token = _create_user_and_login(client, "md-upload")
+
+    class DummyTask:
+        id = "task-rag-md-1"
+
+    monkeypatch.setattr(
+        "app.api.routers.rag.process_document_task.delay",
+        lambda document_id: DummyTask(),
+    )
+
+    response = client.post(
+        "/api/rag/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("readme.md", b"# Title\n\nSome markdown content.", "text/markdown")},
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["file_type"] == "md"
+    assert payload["status"] == DOCUMENT_STATUS_QUEUED
+
+    document = db_session.get(Document, payload["id"])
+    assert document.file_type == "md"
+    assert "Title" in document.content
+
+
+def test_upload_pdf_document(client, monkeypatch, db_session):
+    token = _create_user_and_login(client, "pdf-upload")
+
+    from fpdf import FPDF
+    import io
+    buf = io.BytesIO()
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=12)
+    pdf.cell(200, 10, text="Project Orion RAG Test", new_x="LMARGIN", new_y="NEXT")
+    pdf.output(buf)
+    pdf_bytes = buf.getvalue()
+
+    class DummyTask:
+        id = "task-rag-pdf-1"
+
+    monkeypatch.setattr(
+        "app.api.routers.rag.process_document_task.delay",
+        lambda document_id: DummyTask(),
+    )
+
+    response = client.post(
+        "/api/rag/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("report.pdf", pdf_bytes, "application/pdf")},
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["file_type"] == "pdf"
+    assert payload["status"] == DOCUMENT_STATUS_QUEUED
+
+    document = db_session.get(Document, payload["id"])
+    assert document.file_type == "pdf"
+    assert "Project Orion" in document.content
+
+
+def test_upload_unsupported_format(client):
+    token = _create_user_and_login(client, "bad-fmt")
+
+    response = client.post(
+        "/api/rag/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("image.png", b"fake png data", "image/png")},
+    )
+
+    assert response.status_code == 400
+    assert "Unsupported" in response.json()["detail"]
+
+
+def test_upload_empty_pdf(client):
+    token = _create_user_and_login(client, "empty-pdf")
+
+    from fpdf import FPDF
+    import io
+    buf = io.BytesIO()
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=12)
+    pdf.output(buf)
+
+    response = client.post(
+        "/api/rag/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("empty.pdf", buf.getvalue(), "application/pdf")},
+    )
+
+    assert response.status_code == 400
+    assert "no extractable text" in response.json()["detail"].lower()

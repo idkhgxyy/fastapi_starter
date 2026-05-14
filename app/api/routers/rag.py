@@ -8,14 +8,19 @@ from app.services.llm_service import get_llm_client
 from app.core.config import settings
 from app.services.llm_observability_service import create_llm_call_log, elapsed_ms, extract_usage, start_timer
 from app.worker.tasks import process_document_task
+from app.utils.file_parser import parse_file, get_supported_extensions
 
 router = APIRouter()
+
+SUPPORTED_EXTENSIONS = get_supported_extensions()
+SUPPORTED_EXT_TEXT = ", ".join(SUPPORTED_EXTENSIONS)
+
 
 @router.post(
     "/upload",
     response_model=DocumentResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="上传文档并异步构建知识库",
+    summary="上传文档并异步构建知识库（支持 .txt / .md / .pdf）",
     tags=["RAG"],
 )
 async def upload_document(
@@ -24,26 +29,37 @@ async def upload_document(
     current_user = Depends(get_current_active_user)
 ):
     """
-    上传纯文本文档，先保存原始内容，再异步执行切分和向量化。
+    上传文档（支持 .txt / .md / .pdf），先解析并保存纯文本内容，再异步执行切分和向量化。
     """
-    if not file.filename or not file.filename.endswith(".txt"):
-        raise HTTPException(status_code=400, detail="Only .txt files are supported for now.")
-    
-    content_bytes = await file.read()
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided.")
+
+    name_lower = file.filename.lower()
+    if not any(name_lower.endswith(ext) for ext in SUPPORTED_EXTENSIONS):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type. Supported: {SUPPORTED_EXT_TEXT}",
+        )
+
+    raw_bytes = await file.read()
+
     try:
-        content = content_bytes.decode("utf-8")
-    except UnicodeDecodeError:
-        raise HTTPException(status_code=400, detail="File must be valid UTF-8 text.")
-    
-    if not content.strip():
-        raise HTTPException(status_code=400, detail="File is empty.")
+        parsed = parse_file(file.filename, raw_bytes)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse file: {str(e)}")
+
+    if not parsed.plain_text.strip():
+        raise HTTPException(status_code=400, detail="File contains no extractable text.")
 
     rag_service = RAGService(db)
     doc = None
     try:
         doc = rag_service.create_document_record(
             filename=file.filename,
-            content=content,
+            file_type=parsed.file_type,
+            content=parsed.plain_text,
             owner_id=current_user.id,
         )
         task = process_document_task.delay(doc.id)

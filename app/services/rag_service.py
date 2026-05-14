@@ -46,10 +46,11 @@ class RAGService:
             separators=["\n\n", "\n", " ", ""]
         )
 
-    def create_document_record(self, *, filename: str, content: str, owner_id: int) -> Document:
+    def create_document_record(self, *, filename: str, content: str, owner_id: int, file_type: str = "txt") -> Document:
         document = Document(
             owner_id=owner_id,
             filename=filename,
+            file_type=file_type,
             content=content,
             status=DOCUMENT_STATUS_QUEUED,
             chunks_count=0,

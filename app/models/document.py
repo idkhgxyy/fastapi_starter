@@ -18,6 +18,7 @@ class Document(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_type: Mapped[str] = mapped_column(String(16), default="txt", nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default=DOCUMENT_STATUS_QUEUED, index=True)
     chunks_count: Mapped[int] = mapped_column(Integer, default=0)

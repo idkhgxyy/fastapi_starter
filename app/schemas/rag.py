@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class DocumentResponse(BaseModel):
     id: int
     filename: str
+    file_type: str
     status: str
     chunks_count: int
     processing_task_id: Optional[str] = None
