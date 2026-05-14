@@ -12,7 +12,7 @@ from app.models.user import User
 from app.utils.errors import AppException
 
 # OAuth2 配置，指明了客户端应该去哪个 URL 换取 Token
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 def get_db() -> Generator:
     """

@@ -3,458 +3,499 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FastAPI Starter - AI Agent Demo</title>
+    <title>FastAPI AI Agent - Demo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        gray: {
-                            850: '#1f2937',
-                            900: '#111827',
-                        }
-                    }
-                }
-            }
+            theme: { extend: { colors: { gray: { 850: '#1f2937', 900: '#111827' } } } }
         }
     </script>
     <style>
-        /* Custom scrollbar for webkit */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
-        
-        .message-content pre { background-color: #1f2937; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin-top: 0.5rem; margin-bottom: 0.5rem; }
-        .message-content code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+        .tab-btn.active { background-color: #2563eb; color: white; }
+        .tab-btn:not(.active):hover { background-color: #374151; }
         .dot-typing { animation: blink 1.4s infinite both; }
         .dot-typing:nth-child(2) { animation-delay: 0.2s; }
         .dot-typing:nth-child(3) { animation-delay: 0.4s; }
         @keyframes blink { 0% { opacity: .2; } 20% { opacity: 1; } 100% { opacity: .2; } }
+        .status-badge { font-size: 0.65rem; padding: 1px 6px; border-radius: 9999px; }
     </style>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 h-screen flex flex-col font-sans">
-    
-    <!-- Navbar -->
-    <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 h-16 flex items-center justify-between px-6 shrink-0">
-        <div class="flex items-center gap-3">
-            <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg">F</div>
-            <h1 class="text-xl font-bold tracking-tight">FastAPI AI Agent</h1>
-        </div>
-        <div class="flex items-center gap-4">
-            <div id="auth-status" class="flex items-center gap-2 text-sm text-red-500">
-                <span class="w-2 h-2 rounded-full bg-red-500"></span> 未认证
-            </div>
-            <button onclick="toggleAuthModal()" class="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors border border-gray-300 dark:border-gray-600">账号登录</button>
-            <button onclick="toggleConfigModal()" id="config-btn" class="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors border border-gray-300 dark:border-gray-600 hidden">模型配置</button>
-        </div>
-    </header>
 
-    <!-- Main Content -->
-    <main class="flex-1 flex overflow-hidden">
-        <!-- Sidebar: RAG & Tools -->
-        <aside class="w-80 bg-white dark:bg-gray-850 border-r border-gray-200 dark:border-gray-700 flex flex-col hidden md:flex shrink-0">
-            <div class="p-4 border-b border-gray-200 dark:border-gray-700">
-                <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-4">知识库 (RAG)</h2>
-                <div class="space-y-3">
-                    <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center hover:border-blue-500 dark:hover:border-blue-400 transition-colors cursor-pointer" onclick="document.getElementById('file-upload').click()">
-                        <svg class="w-6 h-6 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                        <span class="text-sm text-gray-500 dark:text-gray-400">点击上传知识库文档 (.txt)</span>
-                        <input type="file" id="file-upload" class="hidden" accept=".txt" onchange="uploadDocument(event)">
-                    </div>
+<!-- Navbar -->
+<header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 h-16 flex items-center justify-between px-6 shrink-0">
+    <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg">F</div>
+        <h1 class="text-xl font-bold tracking-tight">FastAPI AI Agent</h1>
+    </div>
+    <div class="flex items-center gap-4">
+        <div id="auth-status" class="flex items-center gap-2 text-sm text-red-500">
+            <span class="w-2 h-2 rounded-full bg-red-500"></span> 未认证
+        </div>
+        <button onclick="toggleAuthModal()" class="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors border border-gray-300 dark:border-gray-600">登录</button>
+        <button onclick="toggleConfigModal()" id="config-btn" class="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors border border-gray-300 dark:border-gray-600 hidden">模型配置</button>
+    </div>
+</header>
+
+<!-- Main Content -->
+<main class="flex-1 flex overflow-hidden">
+    <!-- Left Sidebar -->
+    <aside class="w-80 bg-white dark:bg-gray-850 border-r border-gray-200 dark:border-gray-700 flex flex-col shrink-0">
+        <!-- Tab Bar -->
+        <div class="flex border-b border-gray-200 dark:border-gray-700 p-2 gap-1">
+            <button class="tab-btn active flex-1 text-xs py-2 rounded-md transition-colors" data-tab="knowledge" onclick="switchTab('knowledge')">📚 知识库</button>
+            <button class="tab-btn flex-1 text-xs py-2 rounded-md transition-colors" data-tab="tasks" onclick="switchTab('tasks')">📋 任务</button>
+        </div>
+
+        <!-- Knowledge Base Panel -->
+        <div id="panel-knowledge" class="flex-1 flex flex-col">
+            <div class="p-3 border-b border-gray-200 dark:border-gray-700">
+                <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-3 text-center hover:border-blue-500 cursor-pointer transition-colors" onclick="document.getElementById('file-upload').click()">
+                    <svg class="w-5 h-5 mx-auto mb-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">上传文档 (.txt / .md / .pdf)</span>
+                    <input type="file" id="file-upload" class="hidden" accept=".txt,.md,.markdown,.pdf" onchange="uploadDocument(event)">
                 </div>
             </div>
-            <div class="flex-1 overflow-y-auto p-4">
-                <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3">我的文档</h3>
+
+            <!-- RAG Query -->
+            <div class="p-3 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex gap-2">
+                    <input type="text" id="rag-query-input" class="flex-1 text-xs bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 outline-none focus:border-blue-500" placeholder="输入问题，搜索知识库...">
+                    <button onclick="ragQuery()" class="text-xs px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">搜索</button>
+                </div>
+                <input type="range" id="rag-topk" min="1" max="10" value="3" class="w-full mt-2 h-1">
+                <div class="text-xs text-gray-400 mt-1"><span id="topk-label">Top-3</span> 条结果</div>
+            </div>
+
+            <!-- Doc List -->
+            <div class="flex-1 overflow-y-auto p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400">我的文档</h3>
+                    <button onclick="fetchDocuments()" class="text-xs text-blue-500 hover:text-blue-400">🔄 刷新</button>
+                </div>
                 <ul id="docs-list" class="space-y-2">
-                    <li class="text-sm text-gray-400 text-center py-4">暂无文档或请先设置 Token</li>
+                    <li class="text-xs text-gray-400 text-center py-4">加载中...</li>
                 </ul>
             </div>
-        </aside>
+        </div>
 
-        <!-- Chat Area -->
-        <section class="flex-1 flex flex-col relative bg-gray-50 dark:bg-gray-900">
-            <!-- Messages -->
-            <div id="chat-messages" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
-                <!-- Welcome Message -->
-                <div class="flex gap-4">
-                    <div class="w-8 h-8 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow-md">AI</div>
-                    <div class="flex-1 space-y-2">
-                        <div class="bg-white dark:bg-gray-800 rounded-2xl rounded-tl-none px-5 py-3 shadow-sm inline-block max-w-[85%] border border-gray-100 dark:border-gray-700 text-sm md:text-base">
-                            你好！我是你的 FastAPI 助手。你可以问我普通问题、查询本地知识库，或者让我帮你调用工具（比如查天气、创建任务）。
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Input Area -->
-            <div class="p-4 md:p-6 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                <form id="chat-form" class="max-w-4xl mx-auto relative flex items-end gap-2" onsubmit="sendMessage(event)">
-                    <div class="flex-1 relative bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-shadow shadow-inner">
-                        <textarea id="chat-input" rows="1" class="w-full max-h-32 bg-transparent text-gray-900 dark:text-gray-100 px-4 py-3 outline-none resize-none overflow-y-auto placeholder-gray-500 text-sm md:text-base" placeholder="输入你想问的问题，或输入 '/' 触发工具..." onkeydown="handleEnter(event)"></textarea>
-                    </div>
-                    <button type="submit" id="send-btn" class="h-12 w-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors flex-shrink-0 shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
-                        <svg class="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
-                    </button>
+        <!-- Tasks Panel -->
+        <div id="panel-tasks" class="flex-1 flex-col hidden">
+            <div class="p-3 border-b border-gray-200 dark:border-gray-700">
+                <form onsubmit="createTask(event)" class="space-y-2">
+                    <input type="text" id="task-title-input" class="w-full text-xs bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 outline-none focus:border-blue-500" placeholder="任务标题" required>
+                    <input type="text" id="task-desc-input" class="w-full text-xs bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 outline-none focus:border-blue-500" placeholder="任务描述（可选）">
+                    <button type="submit" class="w-full text-xs py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">+ 创建任务</button>
                 </form>
-                <div class="text-xs text-center text-gray-400 mt-3">
-                    Shift + Enter 换行。当前基于 FastAPI + Ollama 后端。
+            </div>
+            <div class="flex-1 overflow-y-auto p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400">我的任务</h3>
+                    <button onclick="fetchTasks()" class="text-xs text-blue-500 hover:text-blue-400">🔄 刷新</button>
                 </div>
-            </div>
-        </section>
-    </main>
-
-    <!-- Auth Modal -->
-    <div id="auth-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center hidden z-50">
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-200 dark:border-gray-700 transform transition-all">
-            <h2 class="text-xl font-bold mb-4">登录系统</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">请输入邮箱和密码，或者直接输入现有的 Token。</p>
-            
-            <input type="text" id="email-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="Email (如: admin@example.com)">
-            <input type="password" id="password-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-4 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="Password">
-            
-            <div class="text-xs text-gray-400 text-center mb-4">-- 或者直接填 Token --</div>
-            <input type="password" id="token-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-6 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="eyJh...">
-            
-            <div class="flex justify-end gap-3">
-                <button onclick="toggleAuthModal()" class="px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">取消</button>
-                <button onclick="loginOrSaveToken()" class="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors">登录 / 保存</button>
+                <ul id="tasks-list" class="space-y-2">
+                    <li class="text-xs text-gray-400 text-center py-4">加载中...</li>
+                </ul>
             </div>
         </div>
-    </div>
+    </aside>
 
-    <!-- LLM Config Modal -->
-    <div id="config-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center hidden z-50">
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-200 dark:border-gray-700 transform transition-all">
-            <h2 class="text-xl font-bold mb-4">自定义大模型配置</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">您可以配置自己的 API Key，如果不填则使用系统默认配置。API Key 会加密存储。</p>
-            
-            <label class="block text-xs text-gray-500 mb-1">LLM Provider</label>
-            <input type="text" id="llm-provider" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="例如: deepseek, openai, aliyun">
-            
-            <label class="block text-xs text-gray-500 mb-1">Base URL</label>
-            <input type="text" id="llm-base-url" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="例如: https://api.deepseek.com/v1">
-            
-            <label class="block text-xs text-gray-500 mb-1">Model Name</label>
-            <input type="text" id="llm-model-name" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="例如: deepseek-v4-pro">
-            
-            <label class="block text-xs text-gray-500 mb-1">API Key</label>
-            <input type="password" id="llm-api-key" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-6 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="输入新的 API Key (留空表示不修改)">
-            
-            <div class="flex justify-end gap-3">
-                <button onclick="toggleConfigModal()" class="px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">取消</button>
-                <button onclick="saveLLMConfig()" class="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors">保存配置</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // State
-        let token = localStorage.getItem('agent_token') || '';
-        let isGenerating = false;
-
-        // Init
-        document.addEventListener('DOMContentLoaded', () => {
-            updateAuthStatus();
-            if(token) fetchDocuments();
-        });
-
-        // Auth & Config
-        function toggleAuthModal() {
-            const modal = document.getElementById('auth-modal');
-            modal.classList.toggle('hidden');
-        }
-        
-        function toggleConfigModal() {
-            const modal = document.getElementById('config-modal');
-            modal.classList.toggle('hidden');
-            if(!modal.classList.contains('hidden') && token) {
-                // Fetch current config
-                fetch('/api/users/me', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                }).then(res => res.json()).then(data => {
-                    document.getElementById('llm-provider').value = data.llm_provider || '';
-                    document.getElementById('llm-base-url').value = data.llm_base_url || '';
-                    document.getElementById('llm-model-name').value = data.llm_model_name || '';
-                    document.getElementById('llm-api-key').placeholder = data.has_custom_llm_key ? "已配置自定义 Key (留空不修改)" : "输入新的 API Key";
-                });
-            }
-        }
-
-        async function loginOrSaveToken() {
-            const email = document.getElementById('email-input').value.trim();
-            const pwd = document.getElementById('password-input').value.trim();
-            const manualToken = document.getElementById('token-input').value.trim();
-            
-            if (manualToken) {
-                token = manualToken;
-                localStorage.setItem('agent_token', token);
-                updateAuthStatus();
-                toggleAuthModal();
-                fetchDocuments();
-                return;
-            }
-            
-            if (email && pwd) {
-                try {
-                    const formData = new URLSearchParams();
-                    formData.append('username', email);
-                    formData.append('password', pwd);
-                    
-                    const res = await fetch('/api/auth/login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: formData
-                    });
-                    if (res.ok) {
-                        const data = await res.json();
-                        token = data.access_token;
-                        localStorage.setItem('agent_token', token);
-                        updateAuthStatus();
-                        toggleAuthModal();
-                        fetchDocuments();
-                    } else {
-                        alert('登录失败，请检查账号密码');
-                    }
-                } catch(e) {
-                    alert('登录请求出错');
-                }
-            }
-        }
-
-        async function saveLLMConfig() {
-            if (!token) return alert('请先登录');
-            const provider = document.getElementById('llm-provider').value.trim();
-            const baseUrl = document.getElementById('llm-base-url').value.trim();
-            const modelName = document.getElementById('llm-model-name').value.trim();
-            const apiKey = document.getElementById('llm-api-key').value.trim();
-            
-            const payload = {};
-            if (provider) payload.llm_provider = provider;
-            if (baseUrl) payload.llm_base_url = baseUrl;
-            if (modelName) payload.llm_model_name = modelName;
-            if (apiKey) payload.llm_api_key = apiKey;
-
-            try {
-                const res = await fetch('/api/users/me/llm-config', {
-                    method: 'PUT',
-                    headers: { 
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(payload)
-                });
-                if (res.ok) {
-                    alert('大模型配置保存成功！');
-                    toggleConfigModal();
-                } else {
-                    alert('保存失败');
-                }
-            } catch(e) {
-                alert('保存出错');
-            }
-        }
-
-        function updateAuthStatus() {
-            const statusDiv = document.getElementById('auth-status');
-            const configBtn = document.getElementById('config-btn');
-            if (token) {
-                statusDiv.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500"></span> <span class="text-green-600 dark:text-green-400">已认证</span>`;
-                configBtn.classList.remove('hidden');
-            } else {
-                statusDiv.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500"></span> 未认证`;
-                configBtn.classList.add('hidden');
-            }
-        }
-
-        // Auto-resize textarea
-        const textarea = document.getElementById('chat-input');
-        textarea.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = (this.scrollHeight) + 'px';
-        });
-
-        function handleEnter(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if(!isGenerating) sendMessage(e);
-            }
-        }
-
-        // RAG Document handling
-        async function fetchDocuments() {
-            if (!token) return;
-            try {
-                // Since there is no explicit GET /api/rag/documents/ list API mentioned as returning an array in README, 
-                // we'll assume a standard GET /api/rag/documents exists based on changes.md ("新增文档列表与单文档状态查询接口")
-                const res = await fetch('/api/rag/documents', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    const list = document.getElementById('docs-list');
-                    if (data && data.length > 0) {
-                        list.innerHTML = data.map(doc => `
-                            <li class="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex justify-between items-center group">
-                                <div class="truncate pr-2">
-                                    <p class="text-sm truncate text-gray-800 dark:text-gray-200" title="${doc.filename}">${doc.filename}</p>
-                                    <p class="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                                        <span class="w-1.5 h-1.5 rounded-full ${doc.status === 'ready' ? 'bg-green-500' : doc.status === 'failed' ? 'bg-red-500' : 'bg-yellow-500'}"></span>
-                                        ${doc.status}
-                                    </p>
-                                </div>
-                            </li>
-                        `).join('');
-                    } else {
-                        list.innerHTML = `<li class="text-sm text-gray-400 text-center py-4">暂无文档</li>`;
-                    }
-                }
-            } catch (err) {
-                console.error("Fetch docs failed", err);
-            }
-        }
-
-        async function uploadDocument(e) {
-            if (!token) return alert('请先设置 Token');
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const formData = new FormData();
-            formData.append('file', file);
-
-            try {
-                const res = await fetch('/api/rag/upload', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    body: formData
-                });
-                if (res.ok) {
-                    alert('上传成功，处理中...');
-                    fetchDocuments();
-                    // Poll for updates
-                    setTimeout(fetchDocuments, 3000);
-                    setTimeout(fetchDocuments, 10000);
-                } else {
-                    alert('上传失败');
-                }
-            } catch (err) {
-                alert('上传出错');
-            }
-            e.target.value = ''; // reset
-        }
-
-        // Chat
-        function appendMessage(role, text) {
-            const container = document.getElementById('chat-messages');
-            const div = document.createElement('div');
-            div.className = 'flex gap-4';
-            
-            if (role === 'user') {
-                div.classList.add('flex-row-reverse');
-                div.innerHTML = `
-                    <div class="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0 flex items-center justify-center text-gray-700 dark:text-white font-bold text-sm shadow-md">U</div>
-                    <div class="flex-1 flex justify-end space-y-2">
-                        <div class="bg-blue-600 text-white rounded-2xl rounded-tr-none px-5 py-3 shadow-sm inline-block max-w-[85%] text-sm md:text-base whitespace-pre-wrap">${escapeHTML(text)}</div>
-                    </div>
-                `;
-            } else {
-                // AI
-                div.innerHTML = `
-                    <div class="w-8 h-8 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow-md">AI</div>
-                    <div class="flex-1 space-y-2">
-                        <div class="bg-white dark:bg-gray-800 rounded-2xl rounded-tl-none px-5 py-3 shadow-sm inline-block max-w-[85%] border border-gray-100 dark:border-gray-700 text-sm md:text-base message-content whitespace-pre-wrap">${formatMessage(text)}</div>
-                    </div>
-                `;
-            }
-            container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
-            return div;
-        }
-
-        function createTypingIndicator() {
-            const container = document.getElementById('chat-messages');
-            const div = document.createElement('div');
-            div.className = 'flex gap-4 typing-indicator';
-            div.innerHTML = `
+    <!-- Chat Area -->
+    <section class="flex-1 flex flex-col relative bg-gray-50 dark:bg-gray-900">
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+            <div class="flex gap-4">
                 <div class="w-8 h-8 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow-md">AI</div>
                 <div class="flex-1 space-y-2">
-                    <div class="bg-white dark:bg-gray-800 rounded-2xl rounded-tl-none px-5 py-4 shadow-sm inline-flex items-center gap-1 border border-gray-100 dark:border-gray-700">
-                        <span class="w-1.5 h-1.5 bg-gray-400 rounded-full dot-typing"></span>
-                        <span class="w-1.5 h-1.5 bg-gray-400 rounded-full dot-typing"></span>
-                        <span class="w-1.5 h-1.5 bg-gray-400 rounded-full dot-typing"></span>
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl rounded-tl-none px-5 py-3 shadow-sm inline-block max-w-[85%] border border-gray-100 dark:border-gray-700 text-sm">
+                        你好！我是你的 FastAPI 助手。<br><br>
+                        💬 <b>聊天</b>：问我任何问题，我可以查天气、创建任务、查看系统状态<br>
+                        📚 <b>知识库</b>：左侧上传 .txt/.md/.pdf，我会基于你的文档回答<br>
+                        📋 <b>任务</b>：左侧管理待办事项
                     </div>
                 </div>
-            `;
-            container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
-            return div;
+            </div>
+        </div>
+
+        <div class="p-4 md:p-6 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+            <form id="chat-form" class="max-w-4xl mx-auto relative flex items-end gap-2" onsubmit="sendMessage(event)">
+                <div class="flex-1 relative bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
+                    <textarea id="chat-input" rows="1" class="w-full max-h-32 bg-transparent px-4 py-3 outline-none resize-none overflow-y-auto placeholder-gray-500 text-sm" placeholder="输入你想问的问题..."></textarea>
+                </div>
+                <button type="submit" id="send-btn" class="h-12 w-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors flex-shrink-0 shadow-md disabled:opacity-50">
+                    <svg class="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                </button>
+            </form>
+            <div class="text-xs text-center text-gray-400 mt-2">Shift+Enter 换行 · 知识库问题请在左侧面板搜索</div>
+        </div>
+    </section>
+</main>
+
+<!-- Auth Modal -->
+<div id="auth-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center hidden z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-200 dark:border-gray-700">
+        <h2 class="text-xl font-bold mb-4">登录系统</h2>
+        <input type="text" id="email-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500" placeholder="Email">
+        <input type="password" id="password-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-4 outline-none focus:border-blue-500" placeholder="Password">
+        <div class="text-xs text-gray-400 text-center mb-4">-- 或者直接填 Token --</div>
+        <input type="password" id="token-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-6 outline-none focus:border-blue-500" placeholder="eyJh...">
+        <div class="flex justify-end gap-3">
+            <button onclick="toggleAuthModal()" class="px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">取消</button>
+            <button onclick="loginOrSaveToken()" class="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700">登录</button>
+        </div>
+    </div>
+</div>
+
+<!-- LLM Config Modal -->
+<div id="config-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center hidden z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-200 dark:border-gray-700">
+        <h2 class="text-xl font-bold mb-4">自定义大模型配置</h2>
+        <input type="text" id="llm-provider" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500" placeholder="Provider: deepseek, openai...">
+        <input type="text" id="llm-base-url" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500" placeholder="Base URL: https://api.deepseek.com/v1">
+        <input type="text" id="llm-model-name" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500" placeholder="Model Name: deepseek-v4-pro">
+        <input type="password" id="llm-api-key" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-6 outline-none focus:border-blue-500" placeholder="API Key (留空不修改)">
+        <div class="flex justify-end gap-3">
+            <button onclick="toggleConfigModal()" class="px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">取消</button>
+            <button onclick="saveLLMConfig()" class="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700">保存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let token = localStorage.getItem('agent_token') || '';
+let isGenerating = false;
+let activeTab = 'knowledge';
+
+document.addEventListener('DOMContentLoaded', () => {
+    updateAuthStatus();
+    if(token) { fetchDocuments(); fetchTasks(); }
+});
+
+const textarea = document.getElementById('chat-input');
+textarea.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = this.scrollHeight + 'px';
+});
+
+document.getElementById('rag-topk').addEventListener('input', function() {
+    document.getElementById('topk-label').textContent = 'Top-' + this.value;
+});
+
+// === Tabs ===
+function switchTab(name) {
+    activeTab = name;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`[data-tab="${name}"]`).classList.add('active');
+    document.getElementById('panel-knowledge').style.display = name === 'knowledge' ? 'flex' : 'none';
+    document.getElementById('panel-tasks').style.display = name === 'tasks' ? 'flex' : 'none';
+    if (name === 'knowledge' && token) fetchDocuments();
+    if (name === 'tasks' && token) fetchTasks();
+}
+
+// === Auth ===
+function toggleAuthModal() { document.getElementById('auth-modal').classList.toggle('hidden'); }
+function toggleConfigModal() {
+    document.getElementById('config-modal').classList.toggle('hidden');
+    if (!document.getElementById('config-modal').classList.contains('hidden') && token) {
+        fetch('/api/v1/users/me', { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(r => r.json()).then(d => {
+            document.getElementById('llm-provider').value = d.llm_provider || '';
+            document.getElementById('llm-base-url').value = d.llm_base_url || '';
+            document.getElementById('llm-model-name').value = d.llm_model_name || '';
+        });
+    }
+}
+
+async function loginOrSaveToken() {
+    const mt = document.getElementById('token-input').value.trim();
+    if (mt) {
+        token = mt;
+        localStorage.setItem('agent_token', token);
+        updateAuthStatus(); toggleAuthModal(); fetchDocuments(); fetchTasks();
+        return;
+    }
+    const em = document.getElementById('email-input').value.trim();
+    const pw = document.getElementById('password-input').value.trim();
+    if (!em || !pw) return;
+    try {
+        const fd = new URLSearchParams(); fd.append('username', em); fd.append('password', pw);
+        const r = await fetch('/api/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: fd });
+        if (r.ok) {
+            const d = await r.json(); token = d.access_token;
+            localStorage.setItem('agent_token', token);
+            updateAuthStatus(); toggleAuthModal(); fetchDocuments(); fetchTasks();
+        } else alert('登录失败');
+    } catch(e) { alert('登录出错'); }
+}
+
+async function saveLLMConfig() {
+    const payload = {};
+    ['llm-provider','llm-base-url','llm-model-name','llm-api-key'].forEach(id => {
+        const v = document.getElementById(id).value.trim();
+        if (v) payload[id.replace('llm-','llm_').replace('-','_')] = v;
+    });
+    const r = await fetch('/api/v1/users/me/llm-config', { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    if (r.ok) { alert('配置已保存'); toggleConfigModal(); } else alert('保存失败');
+}
+
+function updateAuthStatus() {
+    const s = document.getElementById('auth-status');
+    const c = document.getElementById('config-btn');
+    if (token) {
+        s.innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500"></span> <span class="text-green-600 dark:text-green-400">已认证</span>';
+        c.classList.remove('hidden');
+    } else {
+        s.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500"></span> 未认证';
+        c.classList.add('hidden');
+    }
+}
+
+// === Knowledge Base ===
+async function fetchDocuments() {
+    if (!token) return;
+    try {
+        const r = await fetch('/api/v1/rag/documents', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!r.ok) return;
+        const docs = await r.json();
+        const list = document.getElementById('docs-list');
+        if (docs && docs.length) {
+            const statusColors = { ready: 'bg-green-500', failed: 'bg-red-500', processing: 'bg-blue-500', queued: 'bg-yellow-500' };
+            list.innerHTML = docs.map(d => `
+                <li class="bg-gray-50 dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-2 group">
+                    <span class="status-badge text-white ${statusColors[d.status] || 'bg-gray-500'}">${d.status}</span>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs truncate" title="${escapeHTML(d.filename)}">${escapeHTML(d.filename)}</p>
+                        <p class="text-[10px] text-gray-400">${d.file_type} · ${d.chunks_count} chunks</p>
+                    </div>
+                </li>
+            `).join('');
+        } else {
+            list.innerHTML = '<li class="text-xs text-gray-400 text-center py-4">暂无文档，请先上传</li>';
         }
+    } catch(e) { console.error(e); }
+}
 
-        async function sendMessage(e) {
-            e?.preventDefault();
-            if (!token) return alert('请先点击右上角设置认证 Token');
-            if (isGenerating) return;
+async function uploadDocument(e) {
+    if (!token) return alert('请先登录');
+    const file = e.target.files[0]; if (!file) return;
+    const fd = new FormData(); fd.append('file', file);
+    try {
+        const r = await fetch('/api/v1/rag/upload', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd });
+        if (r.ok) {
+            const doc = await r.json();
+            appendMessage('ai', `✅ 文档已上传！\n文件: ${doc.filename}\n类型: ${doc.file_type}\n状态: ${doc.status}\n系统正在后台处理中，稍后即可搜索。`);
+            fetchDocuments();
+            setTimeout(fetchDocuments, 5000);
+            setTimeout(fetchDocuments, 15000);
+        } else {
+            const err = await r.json();
+            appendMessage('ai', `❌ 上传失败: ${err.detail || r.status}`);
+        }
+    } catch(err) { appendMessage('ai', `❌ 上传出错: ${err.message}`); }
+    e.target.value = '';
+}
 
-            const input = document.getElementById('chat-input');
-            const msg = input.value.trim();
-            if (!msg) return;
-
-            // UI Updates
-            input.value = '';
-            input.style.height = 'auto';
-            appendMessage('user', msg);
-            const indicator = createTypingIndicator();
-            isGenerating = true;
-            document.getElementById('send-btn').disabled = true;
-
-            try {
-                // Call standard chat API. Note: Since we don't know the exact stream API format, we fallback to non-stream JSON for robust demo, 
-                // but if stream=true is supported, we could parse SSE. We will try normal JSON first based on README.
-                const res = await fetch('/api/chat/', {
-                    method: 'POST',
-                    headers: { 
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ message: msg, stream: false })
-                });
-
-                indicator.remove();
-
-                if (res.ok) {
-                    const data = await res.json();
-                    const reply = data.reply || data.message || data.response || "请求成功，但未解析到回答内容";
-                    appendMessage('ai', reply);
-                } else {
-                    const err = await res.text();
-                    appendMessage('ai', `请求出错: ${res.status} - ${err}`);
-                }
-            } catch (err) {
-                indicator.remove();
-                appendMessage('ai', `网络错误: ${err.message}`);
-            } finally {
-                isGenerating = false;
-                document.getElementById('send-btn').disabled = false;
+async function ragQuery() {
+    if (!token) return alert('请先登录');
+    const q = document.getElementById('rag-query-input').value.trim();
+    if (!q) return;
+    const topk = parseInt(document.getElementById('rag-topk').value) || 3;
+    appendMessage('user', `📚 [知识库搜索] ${q}`);
+    const indicator = createTypingIndicator();
+    let fullText = '';
+    let sourceChunks = [];
+    try {
+        const r = await fetch('/api/v1/rag/query/stream', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: q, top_k: topk })
+        });
+        indicator.remove();
+        if (!r.ok) { appendMessage('ai', `查询失败: ${r.status}`); return; }
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        const msgDiv = appendMessage('ai', '⏳ 思考中...');
+        const contentDiv = msgDiv.querySelector('.bg-white, .bg-gray-800');
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const payload = line.slice(6).trim();
+                if (payload === '[DONE]') continue;
+                try {
+                    const obj = JSON.parse(payload);
+                    if (obj.content) {
+                        fullText += obj.content;
+                        contentDiv.textContent = fullText;
+                        document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
+                    }
+                    if (obj.source_chunks) sourceChunks = obj.source_chunks;
+                    if (obj.error) { contentDiv.textContent = '流式输出错误: ' + obj.error; }
+                } catch(e) {}
             }
         }
-
-        function escapeHTML(str) {
-            return str.replace(/[&<>'"]/g, tag => ({
-                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
-            }[tag]));
+        if (sourceChunks.length) {
+            contentDiv.textContent = fullText + '\n\n📎 参考片段:\n' + sourceChunks.map((c,i) => `  [${i+1}] ${c.substring(0,80)}...`).join('\n');
         }
+    } catch(err) {
+        indicator.remove();
+        appendMessage('ai', `查询出错: ${err.message}`);
+    }
+}
 
-        // Basic markdown-like formatting for AI response
-        function formatMessage(str) {
-            let html = escapeHTML(str);
-            // bold
-            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            // inline code
-            html = html.replace(/`([^`]+)`/g, '<code class="bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400 px-1 py-0.5 rounded text-sm">$1</code>');
-            return html;
+// === Tasks ===
+async function fetchTasks() {
+    if (!token) return;
+    try {
+        const r = await fetch('/api/v1/tasks/', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!r.ok) return;
+        const tasks = await r.json();
+        const list = document.getElementById('tasks-list');
+        if (tasks && tasks.length) {
+            const statusColors = { pending: 'bg-yellow-500', in_progress: 'bg-blue-500', completed: 'bg-green-500' };
+            const nextStatus = { pending: 'in_progress', in_progress: 'completed', completed: 'pending' };
+            list.innerHTML = tasks.map(t => `
+                <li class="bg-gray-50 dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="status-badge text-white ${statusColors[t.status] || 'bg-gray-500'}">${t.status}</span>
+                        <p class="text-xs font-medium truncate flex-1">${escapeHTML(t.title)}</p>
+                        <button onclick="deleteTask(${t.id})" class="text-[10px] text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100">✕</button>
+                    </div>
+                    ${t.description ? `<p class="text-[10px] text-gray-400 truncate ml-1">${escapeHTML(t.description)}</p>` : ''}
+                    <div class="flex gap-1 mt-1">
+                        <button onclick="cycleTaskStatus(${t.id}, '${t.status}', '${nextStatus[t.status]}')" class="text-[10px] px-2 py-0.5 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600">→ ${nextStatus[t.status]}</button>
+                    </div>
+                </li>
+            `).join('');
+        } else {
+            list.innerHTML = '<li class="text-xs text-gray-400 text-center py-4">暂无任务</li>';
         }
-    </script>
+    } catch(e) { console.error(e); }
+}
+
+async function createTask(e) {
+    e.preventDefault();
+    if (!token) return alert('请先登录');
+    const title = document.getElementById('task-title-input').value.trim();
+    const desc = document.getElementById('task-desc-input').value.trim();
+    if (!title) return;
+    try {
+        const r = await fetch('/api/v1/tasks/', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, description: desc, status: 'pending' })
+        });
+        if (r.ok) {
+            document.getElementById('task-title-input').value = '';
+            document.getElementById('task-desc-input').value = '';
+            fetchTasks();
+            appendMessage('ai', `✅ 任务「${title}」已创建`);
+        }
+    } catch(e) { console.error(e); }
+}
+
+async function cycleTaskStatus(id, fromStatus, toStatus) {
+    try {
+        const r = await fetch(`/api/v1/tasks/${id}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: toStatus })
+        });
+        if (r.ok) fetchTasks();
+    } catch(e) { console.error(e); }
+}
+
+async function deleteTask(id) {
+    if (!confirm('确定删除此任务？')) return;
+    try {
+        const r = await fetch(`/api/v1/tasks/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        if (r.ok) fetchTasks();
+    } catch(e) { console.error(e); }
+}
+
+// === Chat ===
+function appendMessage(role, text) {
+    const container = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = 'flex gap-4';
+    if (role === 'user') {
+        div.classList.add('flex-row-reverse');
+        div.innerHTML = `<div class="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0 flex items-center justify-center text-gray-700 dark:text-white font-bold text-sm shadow-md">U</div><div class="flex-1 flex justify-end"><div class="bg-blue-600 text-white rounded-2xl rounded-tr-none px-5 py-3 shadow-sm inline-block max-w-[85%] text-sm whitespace-pre-wrap">${escapeHTML(text)}</div></div>`;
+    } else {
+        div.innerHTML = `<div class="w-8 h-8 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow-md">AI</div><div class="flex-1"><div class="bg-white dark:bg-gray-800 rounded-2xl rounded-tl-none px-5 py-3 shadow-sm inline-block max-w-[85%] border border-gray-100 dark:border-gray-700 text-sm whitespace-pre-wrap">${formatMessage(text)}</div></div>`;
+    }
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    return div;
+}
+
+function createTypingIndicator() {
+    const container = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = 'flex gap-4 typing-indicator';
+    div.innerHTML = `<div class="w-8 h-8 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow-md">AI</div><div class="flex-1"><div class="bg-white dark:bg-gray-800 rounded-2xl rounded-tl-none px-5 py-4 shadow-sm inline-flex items-center gap-1 border border-gray-100 dark:border-gray-700"><span class="w-1.5 h-1.5 bg-gray-400 rounded-full dot-typing"></span><span class="w-1.5 h-1.5 bg-gray-400 rounded-full dot-typing"></span><span class="w-1.5 h-1.5 bg-gray-400 rounded-full dot-typing"></span></div></div>`;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    return div;
+}
+
+async function sendMessage(e) {
+    e?.preventDefault();
+    if (!token) return alert('请先登录');
+    if (isGenerating) return;
+    const input = document.getElementById('chat-input');
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = ''; input.style.height = 'auto';
+    appendMessage('user', msg);
+    const indicator = createTypingIndicator();
+    isGenerating = true;
+    document.getElementById('send-btn').disabled = true;
+    try {
+        const r = await fetch('/api/v1/chat/', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: msg, stream: false })
+        });
+        indicator.remove();
+        if (r.ok) {
+            const d = await r.json();
+            appendMessage('ai', d.reply || d.message || d.response || '无回答内容');
+        } else {
+            const err = await r.text();
+            appendMessage('ai', `请求出错: ${r.status} - ${err}`);
+        }
+    } catch(err) {
+        indicator.remove();
+        appendMessage('ai', `网络错误: ${err.message}`);
+    } finally {
+        isGenerating = false;
+        document.getElementById('send-btn').disabled = false;
+    }
+}
+
+function handleEnter(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if(!isGenerating) sendMessage(e); }
+}
+
+function escapeHTML(str) {
+    return String(str).replace(/[&<>'"]/g, t => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[t]));
+}
+
+function formatMessage(str) {
+    let h = escapeHTML(str);
+    h = h.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    h = h.replace(/`([^`]+)`/g, '<code class="bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400 px-1 py-0.5 rounded text-xs">$1</code>');
+    return h;
+}
+</script>
 </body>
 </html>

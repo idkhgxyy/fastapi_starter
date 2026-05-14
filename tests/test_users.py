@@ -3,7 +3,7 @@ def test_create_user(client):
     测试用户注册功能
     """
     response = client.post(
-        "/api/users/",
+        "/api/v1/users/",
         json={
             "username": "pytestuser",
             "email": "pytest@example.com",
@@ -24,7 +24,7 @@ def test_create_duplicate_user(client):
     测试注册重复邮箱的用户应该失败
     """
     response = client.post(
-        "/api/users/",
+        "/api/v1/users/",
         json={
             "username": "pytestuser2",
             "email": "pytest@example.com",  # 相同的邮箱

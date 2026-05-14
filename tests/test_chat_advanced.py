@@ -6,7 +6,7 @@ from app.services.llm_service import generate_chat_reply_stream
 def test_chat_rate_limiting(client):
     # 1. Create a user
     client.post(
-        "/api/users/",
+        "/api/v1/users/",
         json={
             "username": "ratelimit_user",
             "email": "ratelimit@example.com",
@@ -14,7 +14,7 @@ def test_chat_rate_limiting(client):
         },
     )
     login_resp = client.post(
-        "/api/auth/login",
+        "/api/v1/auth/login",
         data={
             "username": "ratelimit@example.com",
             "password": "password123"
@@ -30,7 +30,7 @@ def test_chat_rate_limiting(client):
         status_codes = []
         for _ in range(25):
             response = client.post(
-                "/api/chat/",
+                "/api/v1/chat/",
                 headers=headers,
                 json={"message": "hello", "stream": False}
             )
@@ -42,7 +42,7 @@ def test_chat_rate_limiting(client):
 
 def test_chat_sse_stream(client):
     client.post(
-        "/api/users/",
+        "/api/v1/users/",
         json={
             "username": "sse_user",
             "email": "sse@example.com",
@@ -50,7 +50,7 @@ def test_chat_sse_stream(client):
         },
     )
     login_resp = client.post(
-        "/api/auth/login",
+        "/api/v1/auth/login",
         data={
             "username": "sse@example.com",
             "password": "password123"
@@ -64,7 +64,7 @@ def test_chat_sse_stream(client):
         yield 'data: [DONE]\n\n'
 
     with patch("app.api.routers.chat.generate_chat_reply_stream", mock_stream_generator):
-        with client.stream("POST", "/api/chat/", headers=headers, json={"message": "hello", "stream": True}) as response:
+        with client.stream("POST", "/api/v1/chat/", headers=headers, json={"message": "hello", "stream": True}) as response:
             assert response.status_code == 200
             assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
             

@@ -23,13 +23,13 @@ def main():
             print("2. 获取真实 Token...")
             import requests
             # 确保用户存在
-            requests.post("http://localhost:8000/api/users/", json={
+            requests.post("http://localhost:8000/api/v1/users/", json={
                 "username": "demouser",
                 "email": "demo@example.com",
                 "password": "password123"
             })
             # 登录拿 token
-            resp = requests.post("http://localhost:8000/api/auth/login", data={
+            resp = requests.post("http://localhost:8000/api/v1/auth/login", data={
                 "username": "demo@example.com",
                 "password": "password123"
             })

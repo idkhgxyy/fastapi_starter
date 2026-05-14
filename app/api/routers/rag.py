@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+import json
 
 from app.api.deps import get_db, get_current_active_user
 from app.schemas.rag import DocumentResponse, RAGQueryRequest, RAGQueryResponse
@@ -156,7 +158,7 @@ async def query_knowledge_base(
         create_llm_call_log(
             db,
             user_id=current_user.id,
-            endpoint="/api/rag/query",
+            endpoint="/api/v1/rag/query",
             prompt=request.query,
             response=response_text,
             tool_calls=None,
@@ -177,7 +179,7 @@ async def query_knowledge_base(
         create_llm_call_log(
             db,
             user_id=current_user.id,
-            endpoint="/api/rag/query",
+            endpoint="/api/v1/rag/query",
             prompt=request.query,
             response=None,
             tool_calls=None,
@@ -189,3 +191,65 @@ async def query_knowledge_base(
             error_message=str(e),
         )
         raise HTTPException(status_code=500, detail=f"RAG query failed: {str(e)}")
+
+
+@router.post("/query/stream", summary="基于知识库检索并流式回答 (SSE)", tags=["RAG"])
+async def query_knowledge_base_stream(
+    request: RAGQueryRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)
+):
+    if not request.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty.")
+
+    rag_service = RAGService(db)
+    chunks = await rag_service.retrieve_relevant_chunks(
+        query=request.query,
+        owner_id=current_user.id,
+        top_k=request.top_k,
+    )
+
+    if not chunks:
+        async def _empty():
+            data = json.dumps({"content": "知识库中暂无已处理完成的相关文档，请先上传文档并等待处理完成。", "source_chunks": []}, ensure_ascii=False)
+            yield f"data: {data}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(_empty(), media_type="text/event-stream")
+
+    context_texts = [f"[相关片段 {i}]:\n{chunk.content}" for i, chunk in enumerate(chunks, 1)]
+    context_str = "\n\n".join(context_texts)
+    system_prompt = (
+        "你是一个专业的问答助手。请基于以下提供的参考资料，准确回答用户的问题。\n"
+        "如果你不知道答案，或者参考资料中没有相关信息，请直接说明，不要编造。\n\n"
+        f"=== 参考资料 ===\n{context_str}\n=== 结束 ==="
+    )
+
+    source_chunk_contents = [c.content for c in chunks]
+
+    async def _stream():
+        llm_client = get_llm_client()
+        full_response = ""
+        try:
+            response = await llm_client.chat.completions.create(
+                model=settings.LLM_MODEL_NAME,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": request.query},
+                ],
+                temperature=0.1,
+                stream=True,
+            )
+            async for chunk in response:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    full_response += content
+                    data = json.dumps({"content": content}, ensure_ascii=False)
+                    yield f"data: {data}\n\n"
+            data = json.dumps({"source_chunks": source_chunk_contents}, ensure_ascii=False)
+            yield f"data: {data}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            data = json.dumps({"error": str(e)}, ensure_ascii=False)
+            yield f"data: {data}\n\n"
+
+    return StreamingResponse(_stream(), media_type="text/event-stream")

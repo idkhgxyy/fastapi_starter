@@ -8,7 +8,7 @@ def _create_user_and_login(client, suffix: str) -> str:
     email = f"rag-{suffix}@example.com"
     password = "password123"
     client.post(
-        "/api/users/",
+        "/api/v1/users/",
         json={
             "username": f"raguser-{suffix}",
             "email": email,
@@ -16,7 +16,7 @@ def _create_user_and_login(client, suffix: str) -> str:
         },
     )
     response = client.post(
-        "/api/auth/login",
+        "/api/v1/auth/login",
         data={"username": email, "password": password},
     )
     assert response.status_code == 200
@@ -35,7 +35,7 @@ def test_upload_document_creates_async_job(client, monkeypatch, db_session):
     )
 
     response = client.post(
-        "/api/rag/upload",
+        "/api/v1/rag/upload",
         headers={"Authorization": f"Bearer {token}"},
         files={"file": ("notes.txt", b"hello rag", "text/plain")},
     )
@@ -57,7 +57,7 @@ def test_upload_document_creates_async_job(client, monkeypatch, db_session):
 
 def test_query_knowledge_base_uses_current_user_scope(client, monkeypatch, db_session):
     token = _create_user_and_login(client, "query")
-    user_id = int(client.get("/api/users/me", headers={"Authorization": f"Bearer {token}"}).json()["id"])
+    user_id = int(client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {token}"}).json()["id"])
 
     ready_doc = Document(
         owner_id=user_id,
@@ -92,7 +92,7 @@ def test_query_knowledge_base_uses_current_user_scope(client, monkeypatch, db_se
     monkeypatch.setattr("app.api.routers.rag.get_llm_client", fake_get_llm_client)
 
     response = client.post(
-        "/api/rag/query",
+        "/api/v1/rag/query",
         headers={"Authorization": f"Bearer {token}"},
         json={"query": "我的知识库里有什么？", "top_k": 2},
     )
@@ -105,7 +105,7 @@ def test_query_knowledge_base_uses_current_user_scope(client, monkeypatch, db_se
 
 def test_worker_requeues_owned_document_and_returns_task_status(client, monkeypatch, db_session):
     token = _create_user_and_login(client, "worker")
-    user_id = int(client.get("/api/users/me", headers={"Authorization": f"Bearer {token}"}).json()["id"])
+    user_id = int(client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {token}"}).json()["id"])
 
     document = Document(
         owner_id=user_id,
@@ -135,7 +135,7 @@ def test_worker_requeues_owned_document_and_returns_task_status(client, monkeypa
     )
 
     process_response = client.post(
-        "/api/worker/process",
+        "/api/v1/worker/process",
         headers={"Authorization": f"Bearer {token}"},
         json={"document_id": document.id},
     )
@@ -150,7 +150,7 @@ def test_worker_requeues_owned_document_and_returns_task_status(client, monkeypa
     assert updated_document.status == DOCUMENT_STATUS_QUEUED
 
     status_response = client.get(
-        "/api/worker/status/task-rag-worker-1",
+        "/api/v1/worker/status/task-rag-worker-1",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert status_response.status_code == 200
@@ -169,7 +169,7 @@ def test_upload_md_document(client, monkeypatch, db_session):
     )
 
     response = client.post(
-        "/api/rag/upload",
+        "/api/v1/rag/upload",
         headers={"Authorization": f"Bearer {token}"},
         files={"file": ("readme.md", b"# Title\n\nSome markdown content.", "text/markdown")},
     )
@@ -206,7 +206,7 @@ def test_upload_pdf_document(client, monkeypatch, db_session):
     )
 
     response = client.post(
-        "/api/rag/upload",
+        "/api/v1/rag/upload",
         headers={"Authorization": f"Bearer {token}"},
         files={"file": ("report.pdf", pdf_bytes, "application/pdf")},
     )
@@ -225,7 +225,7 @@ def test_upload_unsupported_format(client):
     token = _create_user_and_login(client, "bad-fmt")
 
     response = client.post(
-        "/api/rag/upload",
+        "/api/v1/rag/upload",
         headers={"Authorization": f"Bearer {token}"},
         files={"file": ("image.png", b"fake png data", "image/png")},
     )
@@ -246,10 +246,61 @@ def test_upload_empty_pdf(client):
     pdf.output(buf)
 
     response = client.post(
-        "/api/rag/upload",
+        "/api/v1/rag/upload",
         headers={"Authorization": f"Bearer {token}"},
         files={"file": ("empty.pdf", buf.getvalue(), "application/pdf")},
     )
 
     assert response.status_code == 400
     assert "no extractable text" in response.json()["detail"].lower()
+
+
+def test_rag_query_stream_returns_sse(client, monkeypatch):
+    token = _create_user_and_login(client, "stream")
+
+    class FakeChunk:
+        content = "streamed reply chunk"
+
+    async def fake_retrieve(_self, *, query=None, owner_id=None, top_k=None):
+        return [FakeChunk()]
+
+    async def fake_stream_create(**kwargs):
+        async def gen():
+            chunk = type('C', (), {
+                'choices': [type('Ch', (), {
+                    'delta': type('D', (), {'content': 'Hello from RAG stream'})()
+                })()]
+            })()
+            yield chunk
+        return gen()
+
+    monkeypatch.setattr(RAGService, "retrieve_relevant_chunks", fake_retrieve)
+    monkeypatch.setattr("app.api.routers.rag.get_llm_client", lambda: type('C', (), {
+        'chat': type('Ch', (), {
+            'completions': type('Co', (), {
+                'create': staticmethod(fake_stream_create)
+            })()
+        })()
+    })())
+
+    with client.stream("POST", "/api/v1/rag/query/stream",
+                       headers={"Authorization": f"Bearer {token}"},
+                       json={"query": "test", "top_k": 3}) as resp:
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "text/event-stream; charset=utf-8"
+
+
+def test_rag_query_stream_no_chunks(client, monkeypatch, db_session):
+    token = _create_user_and_login(client, "stream-empty")
+
+    async def fake_retrieve_empty(*a, **kw):
+        return []
+
+    monkeypatch.setattr(RAGService, "retrieve_relevant_chunks", fake_retrieve_empty)
+
+    with client.stream("POST", "/api/v1/rag/query/stream",
+                       headers={"Authorization": f"Bearer {token}"},
+                       json={"query": "test", "top_k": 3}) as resp:
+        assert resp.status_code == 200
+        content = resp.read().decode("utf-8")
+        assert "暂无已处理" in content or "data:" in content

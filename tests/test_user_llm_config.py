@@ -4,7 +4,7 @@ from httpx import AsyncClient
 def test_user_llm_config(client):
     # 1. Create a user
     client.post(
-        "/api/users/",
+        "/api/v1/users/",
         json={
             "username": "llm_user",
             "email": "llm@example.com",
@@ -14,7 +14,7 @@ def test_user_llm_config(client):
     
     # 2. Login
     login_resp = client.post(
-        "/api/auth/login",
+        "/api/v1/auth/login",
         data={
             "username": "llm@example.com",
             "password": "password123"
@@ -24,7 +24,7 @@ def test_user_llm_config(client):
     headers = {"Authorization": f"Bearer {token}"}
     
     # 3. Check initial config
-    me_resp = client.get("/api/users/me", headers=headers)
+    me_resp = client.get("/api/v1/users/me", headers=headers)
     assert me_resp.status_code == 200
     data = me_resp.json()
     assert data["has_custom_llm_key"] is False
@@ -32,7 +32,7 @@ def test_user_llm_config(client):
     
     # 4. Update config
     update_resp = client.put(
-        "/api/users/me/llm-config",
+        "/api/v1/users/me/llm-config",
         headers=headers,
         json={
             "llm_provider": "custom_openai",

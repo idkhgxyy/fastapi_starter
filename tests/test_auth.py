@@ -7,7 +7,7 @@ def test_login_success(client):
     """
     # 1. 准备测试数据：创建一个用户
     client.post(
-        "/api/users/",
+        "/api/v1/users/",
         json={
             "username": "authuser",
             "email": "auth@example.com",
@@ -17,7 +17,7 @@ def test_login_success(client):
 
     # 2. 测试登录
     response = client.post(
-        "/api/auth/login",
+        "/api/v1/auth/login",
         data={
             "username": "auth@example.com",
             "password": "authpassword"
@@ -33,7 +33,7 @@ def test_login_wrong_password(client):
     测试错误密码登录
     """
     response = client.post(
-        "/api/auth/login",
+        "/api/v1/auth/login",
         data={
             "username": "auth@example.com",
             "password": "wrongpassword"
@@ -46,5 +46,5 @@ def test_access_protected_route_without_token(client):
     """
     测试不带 Token 访问受保护接口
     """
-    response = client.get("/api/users/me")
+    response = client.get("/api/v1/users/me")
     assert response.status_code == 401

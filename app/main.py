@@ -40,10 +40,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="FastAPI Starter",
-    description="A production-ready FastAPI starter project.",
+    description="A production-ready FastAPI AI Agent starter project.",
     version="0.1.0",
     lifespan=lifespan,
-    docs_url=None  # 我们将接管默认的 docs 路由
+    docs_url=None,
 )
 
 # 注册中间件
@@ -59,6 +59,11 @@ async def custom_swagger_ui_html():
         openapi_url=app.openapi_url,
         title=app.title + " - Swagger UI",
         oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+        swagger_ui_init_oauth={
+            "clientId": "fastapi-starter",
+            "appName": "FastAPI Starter",
+            "usePkceWithAuthorizationCodeGrant": False,
+        },
     ).body.decode("utf-8")
     
     # 注入 CSS 样式，使 Swagger UI 在系统深色模式下表现良好，同时保留浅色模式
@@ -132,14 +137,14 @@ async def custom_swagger_ui_html():
 app.add_exception_handler(AppException, app_exception_handler)
 
 # 注册所有路由
-app.include_router(health.router, prefix="/api")
-app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
-app.include_router(users.router, prefix="/api/users", tags=["Users"])
-app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
-app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
-app.include_router(worker.router, prefix="/api/worker", tags=["Worker (Async)"])
-app.include_router(rag.router, prefix="/api/rag", tags=["RAG"])
-app.include_router(observability.router, prefix="/api/observability", tags=["Observability"])
+app.include_router(health.router, prefix="/api/v1")
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
+app.include_router(chat.router, prefix="/api/v1/chat", tags=["Chat"])
+app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["Tasks"])
+app.include_router(worker.router, prefix="/api/v1/worker", tags=["Worker (Async)"])
+app.include_router(rag.router, prefix="/api/v1/rag", tags=["RAG"])
+app.include_router(observability.router, prefix="/api/v1/observability", tags=["Observability"])
 
 @app.get("/", summary="根目录重定向或欢迎信息", tags=["Root"])
 async def root():

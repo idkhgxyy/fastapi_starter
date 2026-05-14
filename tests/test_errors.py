@@ -23,7 +23,7 @@ class TestAppException:
 class TestErrorResponseFormat:
     def test_login_with_wrong_credentials_returns_error_format(self, client):
         client.post(
-            "/api/users/",
+            "/api/v1/users/",
             json={
                 "username": "errorfmt",
                 "email": "errorfmt@example.com",
@@ -31,7 +31,7 @@ class TestErrorResponseFormat:
             },
         )
         response = client.post(
-            "/api/auth/login",
+            "/api/v1/auth/login",
             data={"username": "errorfmt@example.com", "password": "wrong"},
         )
         assert response.status_code == 401
@@ -41,14 +41,14 @@ class TestErrorResponseFormat:
         assert json_data["code"] == 1005
 
     def test_unauthenticated_request_returns_401(self, client):
-        response = client.get("/api/users/me")
+        response = client.get("/api/v1/users/me")
         assert response.status_code == 401
         json_data = response.json()
         assert "detail" in json_data
 
     def test_duplicate_registration_returns_error_format(self, client):
         client.post(
-            "/api/users/",
+            "/api/v1/users/",
             json={
                 "username": "dup1",
                 "email": "dup@example.com",
@@ -56,7 +56,7 @@ class TestErrorResponseFormat:
             },
         )
         response = client.post(
-            "/api/users/",
+            "/api/v1/users/",
             json={
                 "username": "dup2",
                 "email": "dup@example.com",

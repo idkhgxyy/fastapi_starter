@@ -245,7 +245,7 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
                 create_llm_call_log(
                     db,
                     user_id=current_user_id,
-                    endpoint="/api/chat",
+                    endpoint="/api/v1/chat",
                     prompt=message,
                     response=final_reply,
                     tool_calls=tool_calls_payload,
@@ -264,7 +264,7 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
                 create_llm_call_log(
                     db,
                     user_id=current_user_id,
-                    endpoint="/api/chat",
+                    endpoint="/api/v1/chat",
                     prompt=message,
                     response=final_reply,
                     tool_calls=None,
@@ -282,7 +282,7 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
             create_llm_call_log(
                 db,
                 user_id=current_user_id,
-                endpoint="/api/chat",
+                endpoint="/api/v1/chat",
                 prompt=message,
                 response=final_reply,
                 tool_calls=tool_calls_payload,

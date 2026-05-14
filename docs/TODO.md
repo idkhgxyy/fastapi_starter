@@ -31,28 +31,29 @@
   - 已完成：引入 `pypdf` + `app/utils/file_parser.py`，支持 `.txt` / `.md` / `.pdf`
   - 面试价值：证明不是玩具 Demo，能处理真实场景文件
 
-- [ ] **前端 Demo 页面增强**
-  - 当前 `demo.html` 只有聊天功能，缺少知识库上传 / 文档状态查看 / 任务管理
-  - 建议：增加「知识库」Tab（上传文档 + 查看处理进度 + 问答）和「任务」Tab（创建/列表/状态更新）
+- [x] **前端 Demo 页面增强** ✅ (2026-05-14)
+  - ~~当前 `demo.html` 只有聊天功能，缺少知识库上传 / 文档状态查看 / 任务管理~~
+  - 已完成：重写为三栏 Tab 式布局——📚知识库Tab（多格式上传+文档状态badge+内置RAG搜索+Top-K滑块+SSE流式渲染）和📋任务Tab（创建/列表/状态循环切换/删除）
   - 面试价值：面试官可以直接在浏览器里体验完整链路，不用 curl
 
-- [ ] **RAG 问答支持 SSE 流式输出**
-  - 当前只有 `/api/chat/` 支持 `stream=true`，RAG `/api/rag/query` 是阻塞式
-  - 建议：参照 `generate_chat_reply_stream` 模式，为 RAG 增加流式回答
+- [x] **RAG 问答支持 SSE 流式输出** ✅ (2026-05-14)
+  - ~~当前只有 `/api/chat/` 支持 `stream=true`，RAG `/api/rag/query` 是阻塞式~~
+  - 已完成：新增 `POST /api/v1/rag/query/stream` SSE流式端点，前端使用 ReadableStream 实时逐字渲染
   - 面试价值：展示对流式协议的掌握，真实 AI 产品刚需
 
-- [ ] **API 路径版本化**
-  - 当前路由为 `/api/chat/`、`/api/rag/query` 等，建议改为 `/api/v1/...`
+- [x] **API 路径版本化** ✅ (2026-05-14)
+  - ~~当前路由为 `/api/chat/`、`/api/rag/query` 等~~
+  - 已完成：全线迁移至 `/api/v1/...`，同步更新health check、deps OAuth2 URL、前端、所有测试和脚本
   - 面试价值：展示对 API 演进和兼容性的工程意识
 
-- [ ] **Swagger UI 对接 OAuth2 自动获取 Token**
-  - 当前 Swagger 页面可以填 Token，但需要手动从登录接口复制
-  - 建议：在 `main.py` 中配置 `app.swagger_ui_init_oauth`，让 Swagger 自动弹出登录窗口
+- [x] **Swagger UI 对接 OAuth2 自动获取 Token** ✅ (2026-05-14)
+  - ~~当前 Swagger 页面可以填 Token，但需要手动从登录接口复制~~
+  - 已完成：配置 `swagger_ui_init_oauth`，Swagger Authorize 弹窗直接填写邮箱密码即可自动获取Token
   - 面试价值：面试官打开 Swagger 就能直接测试所有接口
 
 - [ ] **增加架构图和 Demo 动图到 README**
   - README 中已有 mermaid 架构图和几张截图，但缺少操作演示 GIF
-  - 建议：录制一条完整的"上传文档 → 等待处理 → 知识库问答 → Agent 创建任务"操作链路的 GIF
+  - 建议：录制一条完整的"上传文档 → 等待处理 → 知识库问答 → Agent 创建任务"操作链路的 GIF（需手动录制）
   - 面试价值：HR 和面试官第一眼就能看懂的 Demo 比代码更有说服力
 
 ---
