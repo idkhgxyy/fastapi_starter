@@ -94,3 +94,38 @@
   - 修改 `User` 模型与数据库表（通过 Alembic 生成并执行了新迁移），新增 `llm_provider`、`llm_base_url`、`llm_model_name` 及 `llm_api_key_encrypted` 字段。
   - 在 `app/api/routers/users.py` 新增了 `PUT /me/llm-config` 接口，并在前端 `demo.html` 页面增加了「模型配置」模态框面板，供用户动态切换 OpenAI、DeepSeek 等兼容大模型。
   - 重构了 `llm_service.py` 中的 `get_llm_client` 方法，实现对当前登录用户的个性化配置读取，未配置时则优雅降级为系统全局 LLM 配置。
+
+## 2026-05-14
+
+### 测试覆盖大幅扩充
+- 提交：`46d14f4`
+- 标题：`test: add 88 new unit tests and e2e verification script`
+- 目标：将测试从 13 个扩充到 101 个，覆盖 encryption、security、errors、task CRUD、RAG service、observability、LLM tools、user/auth service 等核心模块。
+- 主要改动：
+  - 新增 `tests/test_encryption.py`（9 个）、`test_security.py`（11 个）、`test_errors.py`（6 个）、`test_task_endpoints.py`（14 个）、`test_rag_service.py`（16 个）、`test_observability.py`（13 个）、`test_llm_tools.py`（9 个）、`test_user_service_direct.py`（7 个）、`test_auth_service.py`（3 个）
+  - 新增 `scripts/e2e_test.py` 端到端验证脚本（12 步）
+- 验证：`python3 -m pytest -q` → 101 passed
+
+### 项目 TODO 清单
+- 提交：`735aa71`
+- 标题：`docs: add comprehensive TODO list with project strengths/weaknesses analysis`
+- 目标：系统分析项目优劣势，规划后续改进路线图。
+- 主要改动：
+  - 新增 `docs/TODO.md`，含优势总结、22 项待完善清单（按优先级分三档）、面试视角评审
+
+### RAG 多格式文件上传（.md / .pdf）
+- 提交：`7a8b9b0`
+- 标题：`feat(rag): support .md and .pdf file uploads alongside .txt`
+- 目标：完成 TODO 清单第一优先第一项——RAG 支持更多文件格式。
+- 主要改动：
+  - 新增 `app/utils/file_parser.py`：统一文件解析器，支持 `.txt` / `.md` / `.pdf`，基于 `pypdf` 做 PDF 文本提取
+  - `Document` 模型新增 `file_type` 字段（默认 `"txt"`），Alembic 迁移 `b35f62ae79bf`
+  - `DocumentResponse` Schema 新增 `file_type` 字段
+  - 上传接口重构：接受 `.txt` / `.md` / `.markdown` / `.pdf`，拒绝其他格式
+  - 新增 sample 文件：`sample_knowledge.md`、`sample_knowledge.pdf`
+  - 新增 `tests/test_file_parser.py`（14 个文件解析测试）
+  - 补充 `test_rag.py` 中 .md/.pdf 上传、不支持格式拒绝、空 PDF 拒绝 4 个测试
+  - 新增 `scripts/test_rag_multiformat.py` live API 多格式验证脚本
+- 验证：
+  - `python3 -m pytest -q` → 119 passed
+  - Live API: .txt / .md / .pdf 上传均返回 202 + 正确 file_type，.png 返回 400
