@@ -1,9 +1,10 @@
 import asyncio
 
-from app.db.session import SessionLocal
-from app.worker.celery_app import celery_app
 from app.core.logging import logger
+from app.db.session import SessionLocal
 from app.services.rag_service import RAGService
+from app.worker.celery_app import celery_app
+
 
 @celery_app.task(name="process_document_task", bind=True)
 def process_document_task(self, document_id: int):

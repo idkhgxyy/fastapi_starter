@@ -1,16 +1,22 @@
+import json
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-import json
 
-from app.api.deps import get_db, get_current_active_user
-from app.schemas.rag import DocumentResponse, RAGQueryRequest, RAGQueryResponse
-from app.services.rag_service import RAGService
-from app.services.llm_service import get_llm_client
+from app.api.deps import get_current_active_user, get_db
 from app.core.config import settings
-from app.services.llm_observability_service import create_llm_call_log, elapsed_ms, extract_usage, start_timer
+from app.schemas.rag import DocumentResponse, RAGQueryRequest, RAGQueryResponse
+from app.services.llm_observability_service import (
+    create_llm_call_log,
+    elapsed_ms,
+    extract_usage,
+    start_timer,
+)
+from app.services.llm_service import get_llm_client
+from app.services.rag_service import RAGService
+from app.utils.file_parser import get_supported_extensions, parse_file
 from app.worker.tasks import process_document_task
-from app.utils.file_parser import parse_file, get_supported_extensions
 
 router = APIRouter()
 
@@ -28,7 +34,7 @@ SUPPORTED_EXT_TEXT = ", ".join(SUPPORTED_EXTENSIONS)
 async def upload_document(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_active_user)
+    current_user=Depends(get_current_active_user),
 ):
     """
     上传文档（支持 .txt / .md / .pdf），先解析并保存纯文本内容，再异步执行切分和向量化。
@@ -77,20 +83,27 @@ async def upload_document(
         raise HTTPException(status_code=500, detail=f"Failed to process document: {str(e)}")
 
 
-@router.get("/documents", response_model=list[DocumentResponse], summary="查看当前用户的知识库文档", tags=["RAG"])
+@router.get(
+    "/documents",
+    response_model=list[DocumentResponse],
+    summary="查看当前用户的知识库文档",
+    tags=["RAG"],
+)
 async def list_documents(
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_active_user)
+    db: Session = Depends(get_db), current_user=Depends(get_current_active_user)
 ):
     rag_service = RAGService(db)
     return rag_service.list_documents_for_user(owner_id=current_user.id)
 
 
-@router.get("/documents/{document_id}", response_model=DocumentResponse, summary="查看文档处理状态", tags=["RAG"])
+@router.get(
+    "/documents/{document_id}",
+    response_model=DocumentResponse,
+    summary="查看文档处理状态",
+    tags=["RAG"],
+)
 async def get_document(
-    document_id: int,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_active_user)
+    document_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)
 ):
     rag_service = RAGService(db)
     document = rag_service.get_document_for_user(document_id=document_id, owner_id=current_user.id)
@@ -99,11 +112,13 @@ async def get_document(
     return document
 
 
-@router.post("/query", response_model=RAGQueryResponse, summary="基于知识库检索并回答", tags=["RAG"])
+@router.post(
+    "/query", response_model=RAGQueryResponse, summary="基于知识库检索并回答", tags=["RAG"]
+)
 async def query_knowledge_base(
     request: RAGQueryRequest,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_active_user)
+    current_user=Depends(get_current_active_user),
 ):
     """
     1. 接收用户 Query 并计算向量
@@ -112,7 +127,7 @@ async def query_knowledge_base(
     """
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
-    
+
     rag_service = RAGService(db)
     started_at = start_timer()
     try:
@@ -121,32 +136,32 @@ async def query_knowledge_base(
             owner_id=current_user.id,
             top_k=request.top_k,
         )
-        
+
         if not chunks:
             return RAGQueryResponse(
                 query=request.query,
                 answer="知识库中暂无已处理完成的相关文档，请先上传文档并等待处理完成。",
-                source_chunks=[]
+                source_chunks=[],
             )
-        
+
         # 3. 组装 Prompt
         context_texts = []
         for i, chunk in enumerate(chunks, 1):
             context_texts.append(f"[相关片段 {i}]:\n{chunk.content}")
-            
+
         context_str = "\n\n".join(context_texts)
-        
+
         system_prompt = (
             "你是一个专业的问答助手。请基于以下提供的参考资料，准确回答用户的问题。\n"
             "如果你不知道答案，或者参考资料中没有相关信息，请直接说明，不要编造。\n\n"
             f"=== 参考资料 ===\n{context_str}\n=== 结束 ==="
         )
-        
+
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": request.query}
+            {"role": "user", "content": request.query},
         ]
-        
+
         llm_client = get_llm_client()
         response = await llm_client.chat.completions.create(
             model=settings.LLM_MODEL_NAME,
@@ -168,13 +183,11 @@ async def query_knowledge_base(
             latency_ms=elapsed_ms(started_at),
             status="success",
         )
-        
+
         return RAGQueryResponse(
-            query=request.query,
-            answer=response_text,
-            source_chunks=[c.content for c in chunks]
+            query=request.query, answer=response_text, source_chunks=[c.content for c in chunks]
         )
-        
+
     except Exception as e:
         create_llm_call_log(
             db,
@@ -197,7 +210,7 @@ async def query_knowledge_base(
 async def query_knowledge_base_stream(
     request: RAGQueryRequest,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_active_user)
+    current_user=Depends(get_current_active_user),
 ):
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
@@ -210,10 +223,18 @@ async def query_knowledge_base_stream(
     )
 
     if not chunks:
+
         async def _empty():
-            data = json.dumps({"content": "知识库中暂无已处理完成的相关文档，请先上传文档并等待处理完成。", "source_chunks": []}, ensure_ascii=False)
+            data = json.dumps(
+                {
+                    "content": "知识库中暂无已处理完成的相关文档，请先上传文档并等待处理完成。",
+                    "source_chunks": [],
+                },
+                ensure_ascii=False,
+            )
             yield f"data: {data}\n\n"
             yield "data: [DONE]\n\n"
+
         return StreamingResponse(_empty(), media_type="text/event-stream")
 
     context_texts = [f"[相关片段 {i}]:\n{chunk.content}" for i, chunk in enumerate(chunks, 1)]

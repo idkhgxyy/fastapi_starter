@@ -92,7 +92,9 @@ def create_llm_call_log(
         logger.error(f"写入 LLM 调用日志失败: {exc}")
 
 
-def get_llm_overview_stats(db: Session, *, user_id: Optional[int] = None, days: int = 7) -> dict[str, Any]:
+def get_llm_overview_stats(
+    db: Session, *, user_id: Optional[int] = None, days: int = 7
+) -> dict[str, Any]:
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
     base_query = db.query(LLMCallLog).filter(LLMCallLog.created_at >= cutoff)
     if user_id is not None:
@@ -104,7 +106,9 @@ def get_llm_overview_stats(db: Session, *, user_id: Optional[int] = None, days: 
     failed_calls = total_calls - successful_calls
     total_tokens = sum(row.total_tokens for row in rows)
     total_cost = round(sum(row.estimated_cost_usd for row in rows), 6)
-    avg_latency_ms = round(sum(row.latency_ms for row in rows) / total_calls, 2) if total_calls else 0.0
+    avg_latency_ms = (
+        round(sum(row.latency_ms for row in rows) / total_calls, 2) if total_calls else 0.0
+    )
 
     daily_query = db.query(
         func.date(LLMCallLog.created_at).label("day"),
@@ -115,7 +119,9 @@ def get_llm_overview_stats(db: Session, *, user_id: Optional[int] = None, days: 
     ).filter(LLMCallLog.created_at >= cutoff)
     if user_id is not None:
         daily_query = daily_query.filter(LLMCallLog.user_id == user_id)
-    daily_query = daily_query.group_by(func.date(LLMCallLog.created_at)).order_by(func.date(LLMCallLog.created_at))
+    daily_query = daily_query.group_by(func.date(LLMCallLog.created_at)).order_by(
+        func.date(LLMCallLog.created_at)
+    )
 
     daily_stats = [
         {
@@ -135,7 +141,9 @@ def get_llm_overview_stats(db: Session, *, user_id: Optional[int] = None, days: 
     ).filter(LLMCallLog.created_at >= cutoff)
     if user_id is not None:
         endpoint_query = endpoint_query.filter(LLMCallLog.user_id == user_id)
-    endpoint_query = endpoint_query.group_by(LLMCallLog.endpoint).order_by(func.count(LLMCallLog.id).desc())
+    endpoint_query = endpoint_query.group_by(LLMCallLog.endpoint).order_by(
+        func.count(LLMCallLog.id).desc()
+    )
 
     endpoint_stats = [
         {
@@ -154,7 +162,9 @@ def get_llm_overview_stats(db: Session, *, user_id: Optional[int] = None, days: 
     ).filter(LLMCallLog.created_at >= cutoff)
     if user_id is not None:
         per_user_query = per_user_query.filter(LLMCallLog.user_id == user_id)
-    per_user_query = per_user_query.group_by(LLMCallLog.user_id).order_by(func.count(LLMCallLog.id).desc())
+    per_user_query = per_user_query.group_by(LLMCallLog.user_id).order_by(
+        func.count(LLMCallLog.id).desc()
+    )
 
     per_user_stats = [
         {

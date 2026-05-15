@@ -1,17 +1,18 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import select
-
-from app.models.user import User
-from app.core.security import verify_password
-from app.core.logging import logger
-
 from typing import Optional
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.logging import logger
+from app.core.security import verify_password
+from app.models.user import User
+
 
 class AuthService:
     """
     鉴权相关业务逻辑
     """
-    
+
     @classmethod
     def authenticate_user(cls, db: Session, email: str, password: str) -> Optional[User]:
         """
@@ -22,9 +23,9 @@ class AuthService:
         if not user:
             logger.warning(f"Authentication failed: User with email {email} not found")
             return None
-            
+
         if not verify_password(password, user.hashed_password):
             logger.warning(f"Authentication failed: Incorrect password for email {email}")
             return None
-            
+
         return user

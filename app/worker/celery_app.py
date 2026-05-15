@@ -1,14 +1,10 @@
-import os
 from celery import Celery
+
 from app.core.config import settings
 
 # 实例化 Celery 应用
 # 第一个参数是 name，broker 和 backend 我们都用同一个 Redis
-celery_app = Celery(
-    "worker",
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL
-)
+celery_app = Celery("worker", broker=settings.REDIS_URL, backend=settings.REDIS_URL)
 
 # Celery 基础配置
 celery_app.conf.update(

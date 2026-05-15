@@ -12,19 +12,22 @@ from app.worker.tasks import process_document_task
 
 router = APIRouter()
 
+
 class DocumentProcessRequest(BaseModel):
     document_id: int
+
 
 class TaskStatusResponse(BaseModel):
     task_id: str
     status: str
     result: Optional[dict] = None
 
+
 @router.post("/process", response_model=TaskStatusResponse, summary="提交一个处理文档的异步任务")
 async def trigger_document_processing(
     request: DocumentProcessRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     为当前用户的指定文档重新提交一次异步处理任务。
@@ -53,11 +56,10 @@ async def trigger_document_processing(
         },
     )
 
+
 @router.get("/status/{task_id}", response_model=TaskStatusResponse, summary="查询异步任务执行状态")
 async def get_task_status(
-    task_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    task_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """
     根据 Task ID 查询当前用户文档处理任务的执行状态。
@@ -71,12 +73,9 @@ async def get_task_status(
         raise HTTPException(status_code=404, detail="Task not found.")
 
     task_result = celery_app.AsyncResult(task_id)
-    
-    response = TaskStatusResponse(
-        task_id=task_id,
-        status=task_result.status
-    )
-    
+
+    response = TaskStatusResponse(task_id=task_id, status=task_result.status)
+
     if task_result.status == "SUCCESS":
         response.result = task_result.result
     elif task_result.status == "FAILURE":
@@ -88,5 +87,5 @@ async def get_task_status(
             "document_id": document.id,
             "document_status": document.status,
         }
-    
+
     return response

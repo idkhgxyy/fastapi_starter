@@ -1,8 +1,8 @@
 import asyncio
 from typing import List, Optional
 
-from openai import AsyncOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from openai import AsyncOpenAI
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,7 @@ from app.models.document import (
 
 try:
     from sentence_transformers import CrossEncoder
+
     _reranker = None
 except ImportError:
     CrossEncoder = None
@@ -30,10 +31,7 @@ _openai_client = None
 def _get_openai_client() -> AsyncOpenAI:
     global _openai_client
     if _openai_client is None:
-        _openai_client = AsyncOpenAI(
-            api_key=settings.LLM_API_KEY,
-            base_url=settings.LLM_BASE_URL
-        )
+        _openai_client = AsyncOpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
     return _openai_client
 
 
@@ -44,16 +42,17 @@ def get_reranker():
         _reranker = CrossEncoder("BAAI/bge-reranker-base", max_length=512)
     return _reranker
 
+
 class RAGService:
     def __init__(self, db: Session):
         self.db = db
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500,
-            chunk_overlap=50,
-            separators=["\n\n", "\n", " ", ""]
+            chunk_size=500, chunk_overlap=50, separators=["\n\n", "\n", " ", ""]
         )
 
-    def create_document_record(self, *, filename: str, content: str, owner_id: int, file_type: str = "txt") -> Document:
+    def create_document_record(
+        self, *, filename: str, content: str, owner_id: int, file_type: str = "txt"
+    ) -> Document:
         document = Document(
             owner_id=owner_id,
             filename=filename,
@@ -94,7 +93,9 @@ class RAGService:
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
-    def get_document_by_task_id_for_user(self, *, task_id: str, owner_id: int) -> Optional[Document]:
+    def get_document_by_task_id_for_user(
+        self, *, task_id: str, owner_id: int
+    ) -> Optional[Document]:
         stmt = select(Document).where(
             Document.processing_task_id == task_id,
             Document.owner_id == owner_id,
@@ -108,7 +109,9 @@ class RAGService:
         )
         return bool(self.db.scalar(stmt))
 
-    def mark_document_processing(self, *, document_id: int, task_id: Optional[str] = None) -> Document:
+    def mark_document_processing(
+        self, *, document_id: int, task_id: Optional[str] = None
+    ) -> Document:
         document = self.db.get(Document, document_id)
         if document is None:
             raise ValueError(f"Document {document_id} not found")
@@ -121,7 +124,9 @@ class RAGService:
         self.db.refresh(document)
         return document
 
-    def mark_document_failed(self, *, document_id: int, error_message: str, task_id: Optional[str] = None) -> None:
+    def mark_document_failed(
+        self, *, document_id: int, error_message: str, task_id: Optional[str] = None
+    ) -> None:
         document = self.db.get(Document, document_id)
         if document is None:
             return
@@ -151,15 +156,16 @@ class RAGService:
             # 去除多余的空格，减少无意义 token
             texts = [text.replace("\n", " ") for text in texts]
             response = await _get_openai_client().embeddings.create(
-                input=texts,
-                model=settings.EMBEDDING_MODEL_NAME
+                input=texts, model=settings.EMBEDDING_MODEL_NAME
             )
             return [data.embedding for data in response.data]
         except Exception as e:
             logger.error(f"Error getting embeddings: {e}")
             raise e
 
-    async def process_document(self, *, document_id: int, task_id: Optional[str] = None) -> Document:
+    async def process_document(
+        self, *, document_id: int, task_id: Optional[str] = None
+    ) -> Document:
         """处理已上传文档：切分、生成向量并写入向量表。"""
         document = self.mark_document_processing(document_id=document_id, task_id=task_id)
 
@@ -178,7 +184,7 @@ class RAGService:
         batch_size = 10
         embeddings: List[List[float]] = []
         for index in range(0, len(chunks), batch_size):
-            batch_chunks = chunks[index:index + batch_size]
+            batch_chunks = chunks[index : index + batch_size]
             batch_embeddings = await self.get_embeddings(batch_chunks)
             embeddings.extend(batch_embeddings)
 
@@ -201,7 +207,9 @@ class RAGService:
         self.db.refresh(document)
         return document
 
-    async def retrieve_relevant_chunks(self, *, query: str, owner_id: int, top_k: int = 3) -> List[DocumentChunk]:
+    async def retrieve_relevant_chunks(
+        self, *, query: str, owner_id: int, top_k: int = 3
+    ) -> List[DocumentChunk]:
         """根据 query 检索最相关的 DocumentChunks，并在可用时做重排。"""
         if not self.has_ready_documents(owner_id=owner_id):
             return []

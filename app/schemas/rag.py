@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+
 class DocumentResponse(BaseModel):
     id: int
     filename: str
@@ -15,9 +16,11 @@ class DocumentResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class RAGQueryRequest(BaseModel):
     query: str
     top_k: int = Field(3, ge=1, le=10)
+
 
 class RAGQueryResponse(BaseModel):
     query: str

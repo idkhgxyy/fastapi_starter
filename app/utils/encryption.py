@@ -1,7 +1,10 @@
 import base64
 import hashlib
+
 from cryptography.fernet import Fernet
+
 from app.core.config import settings
+
 
 def get_fernet_key(secret: str) -> bytes:
     """
@@ -10,13 +13,16 @@ def get_fernet_key(secret: str) -> bytes:
     digest = hashlib.sha256(secret.encode("utf-8")).digest()
     return base64.urlsafe_b64encode(digest)
 
+
 fernet = Fernet(get_fernet_key(settings.SECRET_KEY))
+
 
 def encrypt_api_key(api_key: str) -> str:
     """加密 API Key"""
     if not api_key:
         return ""
     return fernet.encrypt(api_key.encode("utf-8")).decode("utf-8")
+
 
 def decrypt_api_key(encrypted_key: str) -> str:
     """解密 API Key"""

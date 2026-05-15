@@ -1,6 +1,8 @@
-import jwt
 from datetime import datetime, timedelta, timezone
+
+import jwt
 from passlib.context import CryptContext
+
 from app.core.config import settings
 
 # 配置 bcrypt 作为密码哈希算法。
@@ -8,11 +10,13 @@ from app.core.config import settings
 # 所以在使用 passlib 时，最好把密码显式转换为最大 72 字节的 bytes。
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     验证明文密码与哈希密码是否匹配
     """
     return pwd_context.verify(plain_password, hashed_password)
+
 
 def get_password_hash(password: str) -> str:
     """
@@ -23,7 +27,9 @@ def get_password_hash(password: str) -> str:
         password = password[:72]
     return pwd_context.hash(password)
 
+
 from typing import Optional
+
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """
@@ -33,8 +39,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    
+        expire = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        )
+
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt

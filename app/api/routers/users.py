@@ -1,13 +1,15 @@
-from fastapi import APIRouter, status, Depends
 from typing import List
+
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.schemas.user import UserCreate, UserOut, UserLLMConfigUpdate
-from app.services.user_service import UserService
-from app.api.deps import get_db, get_current_user, get_current_active_superuser
+from app.api.deps import get_current_active_superuser, get_current_user, get_db
 from app.models.user import User
+from app.schemas.user import UserCreate, UserLLMConfigUpdate, UserOut
+from app.services.user_service import UserService
 
 router = APIRouter()
+
 
 @router.post("/", response_model=UserOut, status_code=status.HTTP_201_CREATED, summary="创建用户")
 async def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
@@ -15,6 +17,7 @@ async def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
     通过 Depends(get_db) 自动获取数据库连接，并传递给 service 层
     """
     return UserService.create_user(db, user_in)
+
 
 @router.get("/me", response_model=UserOut, summary="获取当前登录用户信息")
 async def get_user_me(current_user: User = Depends(get_current_user)):
@@ -24,11 +27,12 @@ async def get_user_me(current_user: User = Depends(get_current_user)):
     """
     return current_user
 
+
 @router.put("/me/llm-config", response_model=UserOut, summary="更新当前用户的 LLM 配置")
 async def update_user_llm_config(
     config_in: UserLLMConfigUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     更新用户自己的大模型服务商配置 (支持多租户独立配置)。
@@ -36,25 +40,27 @@ async def update_user_llm_config(
     """
     return UserService.update_llm_config(db, current_user.id, config_in)
 
+
 @router.get("/{user_id}", response_model=UserOut, summary="获取指定用户详情")
 async def get_user(user_id: int, db: Session = Depends(get_db)):
     return UserService.get_user(db, user_id)
 
+
 @router.get("/", response_model=List[UserOut], summary="获取所有用户列表")
 async def list_users(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_superuser)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_superuser)
 ):
     """
     需要超级管理员权限才能访问
     """
     return UserService.list_users(db)
 
+
 @router.delete("/{user_id}", response_model=UserOut, summary="删除指定用户")
 async def delete_user(
-    user_id: int, 
+    user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_superuser)
+    current_user: User = Depends(get_current_active_superuser),
 ):
     """
     需要超级管理员权限才能删除用户

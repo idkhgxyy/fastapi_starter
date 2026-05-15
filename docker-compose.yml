@@ -83,6 +83,21 @@ services:
       api:
         condition: service_healthy
 
+  flower:
+    platform: linux/amd64
+    build: .
+    container_name: fastapi-starter-flower
+    command: celery -A app.worker.celery_app flower --port=5555
+    volumes:
+      - .:/app
+    ports:
+      - "5555:5555"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+
   # 本地大模型与向量服务 (Ollama)
   ollama:
     image: ollama/ollama:latest
@@ -93,10 +108,11 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: ["CMD-SHELL", "ollama list > /dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
 
   # 可观测性服务：Prometheus
   prometheus:

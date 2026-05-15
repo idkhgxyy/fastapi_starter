@@ -1,42 +1,56 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from contextlib import asynccontextmanager
-from sqlalchemy import text
 from prometheus_fastapi_instrumentator import Instrumentator
+from sqlalchemy import text
 
-from app.api.routers import health, users, auth, chat, tasks, worker, rag, observability
-from app.utils.errors import AppException, app_exception_handler
-from app.core.logging import logger
-from app.core.config import settings
-from app.db.session import engine
-from app.db.base import Base
-from app.models.user import User
 from app.api.middleware import RequestIDMiddleware
+from app.api.routers import auth, chat, health, observability, rag, tasks, users, worker
+from app.core.config import settings
+from app.core.logging import logger
+from app.db.session import engine
+from app.utils.errors import AppException, app_exception_handler
+
+
+def _validate_startup_config():
+    errors = []
+
+    if settings.SECRET_KEY == "replace_with_a_long_random_secret_key":
+        errors.append("SECRET_KEY is still the default value. Set a strong random key in .env.")
+
+    if not settings.LLM_API_KEY:
+        logger.warning(
+            "LLM_API_KEY is not set. LLM features will rely on per-user BYOK configs only."
+        )
+
+    if errors:
+        for err in errors:
+            logger.error(f"Config validation error: {err}")
+        raise RuntimeError("Startup config validation failed. Fix the errors above and restart.")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    FastAPI 生命周期管理器
-    """
-    # --- 启动时执行 ---
     logger.info(f"Starting {settings.PROJECT_NAME} v{settings.VERSION}...")
+
+    _validate_startup_config()
+
     logger.info("Testing database connection...")
     try:
-        # 测试与 PostgreSQL 的连接
         with engine.connect() as connection:
             result = connection.execute(text("SELECT 1"))
             logger.info(f"Database connection successful! (Test query returned: {result.scalar()})")
     except Exception as e:
         logger.error(f"Database connection failed: {e}")
-        # 这里只报 error 并不抛出异常（为了防止没有 DB 时整个项目起不来），生产中视情况可阻断启动。
-    
+
     yield
-    
-    # --- 停止时执行 ---
+
     logger.info("Shutting down FastAPI application...")
-    # 可在此处释放连接池等资源
+
 
 app = FastAPI(
     title="FastAPI Starter",
@@ -49,8 +63,17 @@ app = FastAPI(
 # 注册中间件
 app.add_middleware(RequestIDMiddleware)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in settings.CORS_ORIGINS.split(",")],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # 初始化并注册 Prometheus 指标暴露器
 Instrumentator().instrument(app).expose(app)
+
 
 # 自定义 Swagger UI 路由，添加深色模式适配
 @app.get("/docs", include_in_schema=False)
@@ -65,7 +88,7 @@ async def custom_swagger_ui_html():
             "usePkceWithAuthorizationCodeGrant": False,
         },
     ).body.decode("utf-8")
-    
+
     # 注入 CSS 样式，使 Swagger UI 在系统深色模式下表现良好，同时保留浅色模式
     custom_css = """
     <style>
@@ -133,6 +156,7 @@ async def custom_swagger_ui_html():
     html_content = html_content.replace("</head>", f"{custom_css}</head>")
     return HTMLResponse(html_content)
 
+
 # 注册全局异常处理器
 app.add_exception_handler(AppException, app_exception_handler)
 
@@ -146,18 +170,20 @@ app.include_router(worker.router, prefix="/api/v1/worker", tags=["Worker (Async)
 app.include_router(rag.router, prefix="/api/v1/rag", tags=["RAG"])
 app.include_router(observability.router, prefix="/api/v1/observability", tags=["Observability"])
 
+
 @app.get("/", summary="根目录重定向或欢迎信息", tags=["Root"])
 async def root():
     logger.info("Root endpoint accessed.")
     return {
         "message": "Welcome to FastAPI Starter. Visit /docs for API documentation.",
         "docs_url": "/docs",
-        "demo_url": "/demo.html"
+        "demo_url": "/demo.html",
     }
+
 
 # 挂载静态文件目录 (用于前端 Demo)
 import os
+
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
     app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
-
