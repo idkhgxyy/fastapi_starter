@@ -62,7 +62,7 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_db
           REDIS_URL: redis://localhost:6379/0
-          SECRET_KEY: replace_with_a_long_random_secret_key
+          SECRET_KEY: ci_test_secret_key_not_used_in_production
         run: |
           python -m pytest tests/ -q --cov=app --cov-report=term-missing --cov-report=xml
 
