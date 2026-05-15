@@ -36,7 +36,8 @@
         <div id="auth-status" class="flex items-center gap-2 text-sm text-red-500">
             <span class="w-2 h-2 rounded-full bg-red-500"></span> 未认证
         </div>
-        <button onclick="toggleAuthModal()" class="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors border border-gray-300 dark:border-gray-600">登录</button>
+        <button onclick="toggleAuthModal('login')" class="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors border border-gray-300 dark:border-gray-600">登录</button>
+        <button onclick="toggleAuthModal('register')" class="text-sm px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors">注册</button>
         <button onclick="toggleConfigModal()" id="config-btn" class="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors border border-gray-300 dark:border-gray-600 hidden">模型配置</button>
     </div>
 </header>
@@ -108,16 +109,20 @@
     <section class="flex-1 flex flex-col relative bg-gray-50 dark:bg-gray-900">
         <div id="chat-messages" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
             <div class="flex gap-4">
-                <div class="w-8 h-8 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow-md">AI</div>
-                <div class="flex-1 space-y-2">
-                    <div class="bg-white dark:bg-gray-800 rounded-2xl rounded-tl-none px-5 py-3 shadow-sm inline-block max-w-[85%] border border-gray-100 dark:border-gray-700 text-sm">
-                        你好！我是你的 FastAPI 助手。<br><br>
-                        💬 <b>聊天</b>：问我任何问题，我可以查天气、创建任务、查看系统状态<br>
-                        📚 <b>知识库</b>：左侧上传 .txt/.md/.pdf，我会基于你的文档回答<br>
-                        📋 <b>任务</b>：左侧管理待办事项
+                    <div class="w-8 h-8 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow-md">AI</div>
+                    <div class="flex-1">
+                        <div class="bg-white dark:bg-gray-800 rounded-2xl rounded-tl-none px-5 py-4 shadow-sm border border-gray-100 dark:border-gray-700 text-sm">
+                            <p class="font-semibold mb-2">🚀 欢迎使用 FastAPI AI Agent！</p>
+                            <ol class="list-decimal pl-4 space-y-1.5 text-gray-600 dark:text-gray-300 leading-relaxed">
+                                <li>点击右上角 <b class="text-white">注册</b> 创建账号（需要用户名、邮箱、密码）</li>
+                                <li>在左侧 <b>📚 知识库</b> 上传文档，然后提问搜索</li>
+                                <li>在左侧 <b>📋 任务</b> 管理待办事项</li>
+                                <li>在下方对话框 <b>💬 聊天</b>，试试问 AI "帮我创建任务" 或 "计算 2 的 10 次方"</li>
+                            </ol>
+                            <p class="mt-3 text-xs text-gray-400">💡 提示：点击右上角「模型配置」可接入你自己的 LLM API Key</p>
+                        </div>
                     </div>
                 </div>
-            </div>
         </div>
 
         <div class="p-4 md:p-6 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
@@ -137,14 +142,36 @@
 <!-- Auth Modal -->
 <div id="auth-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center hidden z-50">
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-200 dark:border-gray-700">
-        <h2 class="text-xl font-bold mb-4">登录系统</h2>
-        <input type="text" id="email-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500" placeholder="Email">
-        <input type="password" id="password-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-4 outline-none focus:border-blue-500" placeholder="Password">
-        <div class="text-xs text-gray-400 text-center mb-4">-- 或者直接填 Token --</div>
-        <input type="password" id="token-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-6 outline-none focus:border-blue-500" placeholder="eyJh...">
-        <div class="flex justify-end gap-3">
-            <button onclick="toggleAuthModal()" class="px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">取消</button>
-            <button onclick="loginOrSaveToken()" class="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700">登录</button>
+        <!-- Tab Buttons -->
+        <div class="flex mb-6 border-b border-gray-200 dark:border-gray-700">
+            <button id="auth-tab-login" class="auth-tab-btn flex-1 text-sm py-2.5 rounded-t-lg transition-colors font-medium border-b-2 border-blue-600 text-blue-600" onclick="switchAuthTab('login')">登录</button>
+            <button id="auth-tab-register" class="auth-tab-btn flex-1 text-sm py-2.5 rounded-t-lg transition-colors font-medium text-gray-500 hover:text-gray-300" onclick="switchAuthTab('register')">注册新账号</button>
+        </div>
+
+        <!-- Login Form -->
+        <div id="auth-form-login">
+            <h2 class="text-lg font-bold mb-4">👋 欢迎回来</h2>
+            <input type="text" id="login-email" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500" placeholder="Email">
+            <input type="password" id="login-password" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-4 outline-none focus:border-blue-500" placeholder="密码">
+            <div class="text-xs text-gray-400 text-center mb-4">-- 或者直接填 Token --</div>
+            <input type="password" id="token-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-6 outline-none focus:border-blue-500" placeholder="eyJh...">
+            <div class="flex justify-end gap-3">
+                <button onclick="toggleAuthModal()" class="px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">取消</button>
+                <button onclick="doLogin()" class="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700">登录</button>
+            </div>
+        </div>
+
+        <!-- Register Form -->
+        <div id="auth-form-register" class="hidden">
+            <h2 class="text-lg font-bold mb-4">✨ 创建新账号</h2>
+            <input type="text" id="register-username" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500" placeholder="用户名">
+            <input type="text" id="register-email" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-3 outline-none focus:border-blue-500" placeholder="Email">
+            <input type="password" id="register-password" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 mb-4 outline-none focus:border-blue-500" placeholder="密码（至少 6 位）">
+            <p class="text-xs text-gray-400 mb-4">注册后即可使用全部功能，无需额外配置。</p>
+            <div class="flex justify-end gap-3">
+                <button onclick="toggleAuthModal()" class="px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">取消</button>
+                <button onclick="doRegister()" class="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700">注册并登录</button>
+            </div>
         </div>
     </div>
 </div>
@@ -196,7 +223,72 @@ function switchTab(name) {
 }
 
 // === Auth ===
-function toggleAuthModal() { document.getElementById('auth-modal').classList.toggle('hidden'); }
+let authModalMode = 'login';
+
+function toggleAuthModal(mode) {
+    if (mode) authModalMode = mode;
+    const modal = document.getElementById('auth-modal');
+    modal.classList.toggle('hidden');
+    if (!modal.classList.contains('hidden')) switchAuthTab(authModalMode);
+}
+
+function switchAuthTab(mode) {
+    authModalMode = mode;
+    document.getElementById('auth-tab-login').className = mode === 'login'
+        ? 'auth-tab-btn flex-1 text-sm py-2.5 rounded-t-lg transition-colors font-medium border-b-2 border-blue-600 text-blue-600'
+        : 'auth-tab-btn flex-1 text-sm py-2.5 rounded-t-lg transition-colors font-medium text-gray-500 hover:text-gray-300';
+    document.getElementById('auth-tab-register').className = mode === 'register'
+        ? 'auth-tab-btn flex-1 text-sm py-2.5 rounded-t-lg transition-colors font-medium border-b-2 border-blue-600 text-blue-600'
+        : 'auth-tab-btn flex-1 text-sm py-2.5 rounded-t-lg transition-colors font-medium text-gray-500 hover:text-gray-300';
+    document.getElementById('auth-form-login').classList.toggle('hidden', mode !== 'login');
+    document.getElementById('auth-form-register').classList.toggle('hidden', mode !== 'register');
+}
+
+async function doRegister() {
+    const username = document.getElementById('register-username').value.trim();
+    const email = document.getElementById('register-email').value.trim();
+    const password = document.getElementById('register-password').value.trim();
+    if (!username || !email || !password) return alert('请填写所有字段');
+    try {
+        const r = await fetch('/api/v1/users/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, email, password })
+        });
+        if (r.ok) {
+            alert('注册成功！正在自动登录...');
+            document.getElementById('login-email').value = email;
+            document.getElementById('login-password').value = password;
+            await doLogin();
+        } else {
+            const d = await r.json();
+            alert('注册失败: ' + (d.detail || JSON.stringify(d)));
+        }
+    } catch(e) { alert('注册出错: ' + e.message); }
+}
+
+async function doLogin() {
+    const mt = document.getElementById('token-input').value.trim();
+    if (mt) {
+        token = mt;
+        localStorage.setItem('agent_token', token);
+        updateAuthStatus(); toggleAuthModal(); fetchDocuments(); fetchTasks();
+        return;
+    }
+    const em = document.getElementById('login-email').value.trim();
+    const pw = document.getElementById('login-password').value.trim();
+    if (!em || !pw) return alert('请输入 Email 和密码');
+    try {
+        const fd = new URLSearchParams(); fd.append('username', em); fd.append('password', pw);
+        const r = await fetch('/api/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: fd });
+        if (r.ok) {
+            const d = await r.json(); token = d.access_token;
+            localStorage.setItem('agent_token', token);
+            updateAuthStatus(); toggleAuthModal(); fetchDocuments(); fetchTasks();
+        } else alert('登录失败：邮箱或密码错误');
+    } catch(e) { alert('登录出错：' + e.message); }
+}
+
 function toggleConfigModal() {
     document.getElementById('config-modal').classList.toggle('hidden');
     if (!document.getElementById('config-modal').classList.contains('hidden') && token) {
@@ -207,28 +299,6 @@ function toggleConfigModal() {
             document.getElementById('llm-model-name').value = d.llm_model_name || '';
         });
     }
-}
-
-async function loginOrSaveToken() {
-    const mt = document.getElementById('token-input').value.trim();
-    if (mt) {
-        token = mt;
-        localStorage.setItem('agent_token', token);
-        updateAuthStatus(); toggleAuthModal(); fetchDocuments(); fetchTasks();
-        return;
-    }
-    const em = document.getElementById('email-input').value.trim();
-    const pw = document.getElementById('password-input').value.trim();
-    if (!em || !pw) return;
-    try {
-        const fd = new URLSearchParams(); fd.append('username', em); fd.append('password', pw);
-        const r = await fetch('/api/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: fd });
-        if (r.ok) {
-            const d = await r.json(); token = d.access_token;
-            localStorage.setItem('agent_token', token);
-            updateAuthStatus(); toggleAuthModal(); fetchDocuments(); fetchTasks();
-        } else alert('登录失败');
-    } catch(e) { alert('登录出错'); }
 }
 
 async function saveLLMConfig() {
