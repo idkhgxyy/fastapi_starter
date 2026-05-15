@@ -1,7 +1,5 @@
-import copy
-from types import SimpleNamespace
 from time import perf_counter
-from unittest.mock import patch
+from types import SimpleNamespace
 
 from app.services.llm_observability_service import (
     elapsed_ms,

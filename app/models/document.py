@@ -5,6 +5,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.config import settings
 from app.db.base import Base
 
 DOCUMENT_STATUS_QUEUED = "queued"
@@ -48,7 +49,6 @@ class DocumentChunk(Base):
     )
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    # 假设使用 text-embedding-v2 (或类似模型)，维度根据实际模型设定，这里默认 1024
-    embedding: Mapped[Optional[list[float]]] = mapped_column(Vector(1024))
+    embedding: Mapped[Optional[list[float]]] = mapped_column(Vector(settings.EMBEDDING_DIMENSION))
 
     document = relationship("Document", back_populates="chunks")

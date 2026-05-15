@@ -1,13 +1,13 @@
 import io
+
 import pytest
 
 from app.utils.file_parser import (
-    ParsedFile,
+    get_supported_extensions,
     parse_file,
-    parse_txt,
     parse_md,
     parse_pdf,
-    get_supported_extensions,
+    parse_txt,
 )
 
 
@@ -38,6 +38,7 @@ class TestParseMd:
 class TestParsePdf:
     def test_parse_pdf_extracts_text(self):
         from fpdf import FPDF
+
         buf = io.BytesIO()
         pdf = FPDF()
         pdf.add_page()
@@ -68,6 +69,7 @@ class TestParseFileDispatch:
 
     def test_dispatch_pdf(self):
         from fpdf import FPDF
+
         buf = io.BytesIO()
         pdf = FPDF()
         pdf.add_page()

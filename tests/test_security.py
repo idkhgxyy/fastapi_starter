@@ -1,12 +1,13 @@
-import jwt
 from datetime import timedelta
 
+import jwt
+
+from app.core.config import settings
 from app.core.security import (
     create_access_token,
     get_password_hash,
     verify_password,
 )
-from app.core.config import settings
 
 
 class TestPasswordHashing:

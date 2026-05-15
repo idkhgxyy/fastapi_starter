@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_superuser, get_current_user, get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserLLMConfigUpdate, UserOut
+from app.schemas.user import PasswordUpdate, UserCreate, UserLLMConfigUpdate, UserOut
 from app.services.user_service import UserService
 
 router = APIRouter()
@@ -39,6 +39,15 @@ async def update_user_llm_config(
     API Key 将会被对称加密后入库，确保安全性。
     """
     return UserService.update_llm_config(db, current_user.id, config_in)
+
+
+@router.put("/me/password", response_model=UserOut, summary="修改当前用户密码")
+async def change_password(
+    password_in: PasswordUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return UserService.change_password(db, current_user.id, password_in)
 
 
 @router.get("/{user_id}", response_model=UserOut, summary="获取指定用户详情")

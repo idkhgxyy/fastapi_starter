@@ -1,8 +1,10 @@
 import asyncio
+import json
 from typing import List, Optional
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from openai import AsyncOpenAI
+from redis.asyncio import Redis
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
@@ -255,3 +257,34 @@ class RAGService:
         loop = asyncio.get_running_loop()
         scores = await loop.run_in_executor(None, reranker.predict, pairs)
         return list(scores)
+
+
+SESSION_PREFIX = "rag_session"
+SESSION_TTL = 3600
+
+
+async def _get_redis() -> Redis:
+    return Redis.from_url(settings.REDIS_URL, decode_responses=True)
+
+
+async def load_session_history(user_id: int, session_id: str) -> list[dict]:
+    key = f"{SESSION_PREFIX}:{user_id}:{session_id}"
+    r = await _get_redis()
+    raw = await r.get(key)
+    if raw:
+        return json.loads(raw)
+    return []
+
+
+async def save_session_history(user_id: int, session_id: str, history: list[dict]):
+    key = f"{SESSION_PREFIX}:{user_id}:{session_id}"
+    r = await _get_redis()
+    await r.set(key, json.dumps(history, ensure_ascii=False), ex=SESSION_TTL)
+
+
+async def append_session_message(user_id: int, session_id: str, role: str, content: str):
+    history = await load_session_history(user_id, session_id)
+    history.append({"role": role, "content": content})
+    if len(history) > 20:
+        history = history[-20:]
+    await save_session_history(user_id, session_id, history)

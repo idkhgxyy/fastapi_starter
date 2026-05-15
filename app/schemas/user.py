@@ -48,3 +48,8 @@ class UserLLMConfigUpdate(BaseModel):
     llm_base_url: Optional[str] = Field(None, description="LLM Base URL")
     llm_model_name: Optional[str] = Field(None, description="LLM 模型名称")
     llm_api_key: Optional[str] = Field(None, description="LLM API Key (明文，入库时会被加密)")
+
+
+class PasswordUpdate(BaseModel):
+    old_password: str = Field(..., min_length=6, description="旧密码")
+    new_password: str = Field(..., min_length=6, description="新密码")

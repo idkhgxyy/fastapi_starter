@@ -57,7 +57,9 @@ def test_upload_document_creates_async_job(client, monkeypatch, db_session):
 
 def test_query_knowledge_base_uses_current_user_scope(client, monkeypatch, db_session):
     token = _create_user_and_login(client, "query")
-    user_id = int(client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {token}"}).json()["id"])
+    user_id = int(
+        client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {token}"}).json()["id"]
+    )
 
     ready_doc = Document(
         owner_id=user_id,
@@ -82,8 +84,14 @@ def test_query_knowledge_base_uses_current_user_scope(client, monkeypatch, db_se
                     @staticmethod
                     async def create(**_kwargs):
                         return SimpleNamespace(
-                            choices=[SimpleNamespace(message=SimpleNamespace(content="基于当前用户文档的回答"))],
-                            usage=SimpleNamespace(prompt_tokens=5, completion_tokens=7, total_tokens=12),
+                            choices=[
+                                SimpleNamespace(
+                                    message=SimpleNamespace(content="基于当前用户文档的回答")
+                                )
+                            ],
+                            usage=SimpleNamespace(
+                                prompt_tokens=5, completion_tokens=7, total_tokens=12
+                            ),
                         )
 
         return DummyClient()
@@ -105,7 +113,9 @@ def test_query_knowledge_base_uses_current_user_scope(client, monkeypatch, db_se
 
 def test_worker_requeues_owned_document_and_returns_task_status(client, monkeypatch, db_session):
     token = _create_user_and_login(client, "worker")
-    user_id = int(client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {token}"}).json()["id"])
+    user_id = int(
+        client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {token}"}).json()["id"]
+    )
 
     document = Document(
         owner_id=user_id,
@@ -154,7 +164,11 @@ def test_worker_requeues_owned_document_and_returns_task_status(client, monkeypa
         headers={"Authorization": f"Bearer {token}"},
     )
     assert status_response.status_code == 200
-    assert status_response.json()["result"] == {"step": "processing_document", "current": 1, "total": 1}
+    assert status_response.json()["result"] == {
+        "step": "processing_document",
+        "current": 1,
+        "total": 1,
+    }
 
 
 def test_upload_md_document(client, monkeypatch, db_session):
@@ -187,8 +201,10 @@ def test_upload_md_document(client, monkeypatch, db_session):
 def test_upload_pdf_document(client, monkeypatch, db_session):
     token = _create_user_and_login(client, "pdf-upload")
 
-    from fpdf import FPDF
     import io
+
+    from fpdf import FPDF
+
     buf = io.BytesIO()
     pdf = FPDF()
     pdf.add_page()
@@ -237,8 +253,10 @@ def test_upload_unsupported_format(client):
 def test_upload_empty_pdf(client):
     token = _create_user_and_login(client, "empty-pdf")
 
-    from fpdf import FPDF
     import io
+
+    from fpdf import FPDF
+
     buf = io.BytesIO()
     pdf = FPDF()
     pdf.add_page()
@@ -266,26 +284,45 @@ def test_rag_query_stream_returns_sse(client, monkeypatch):
 
     async def fake_stream_create(**kwargs):
         async def gen():
-            chunk = type('C', (), {
-                'choices': [type('Ch', (), {
-                    'delta': type('D', (), {'content': 'Hello from RAG stream'})()
-                })()]
-            })()
+            chunk = type(
+                "C",
+                (),
+                {
+                    "choices": [
+                        type(
+                            "Ch",
+                            (),
+                            {"delta": type("D", (), {"content": "Hello from RAG stream"})()},
+                        )()
+                    ]
+                },
+            )()
             yield chunk
+
         return gen()
 
     monkeypatch.setattr(RAGService, "retrieve_relevant_chunks", fake_retrieve)
-    monkeypatch.setattr("app.api.routers.rag.get_llm_client", lambda: type('C', (), {
-        'chat': type('Ch', (), {
-            'completions': type('Co', (), {
-                'create': staticmethod(fake_stream_create)
-            })()
-        })()
-    })())
+    monkeypatch.setattr(
+        "app.api.routers.rag.get_llm_client",
+        lambda: type(
+            "C",
+            (),
+            {
+                "chat": type(
+                    "Ch",
+                    (),
+                    {"completions": type("Co", (), {"create": staticmethod(fake_stream_create)})()},
+                )()
+            },
+        )(),
+    )
 
-    with client.stream("POST", "/api/v1/rag/query/stream",
-                       headers={"Authorization": f"Bearer {token}"},
-                       json={"query": "test", "top_k": 3}) as resp:
+    with client.stream(
+        "POST",
+        "/api/v1/rag/query/stream",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"query": "test", "top_k": 3},
+    ) as resp:
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "text/event-stream; charset=utf-8"
 
@@ -298,9 +335,12 @@ def test_rag_query_stream_no_chunks(client, monkeypatch, db_session):
 
     monkeypatch.setattr(RAGService, "retrieve_relevant_chunks", fake_retrieve_empty)
 
-    with client.stream("POST", "/api/v1/rag/query/stream",
-                       headers={"Authorization": f"Bearer {token}"},
-                       json={"query": "test", "top_k": 3}) as resp:
+    with client.stream(
+        "POST",
+        "/api/v1/rag/query/stream",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"query": "test", "top_k": 3},
+    ) as resp:
         assert resp.status_code == 200
         content = resp.read().decode("utf-8")
         assert "暂无已处理" in content or "data:" in content

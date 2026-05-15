@@ -1,9 +1,11 @@
 """
 RAG 服务层单元测试 (直接调用 Service 而非走 HTTP)
 """
+
 import asyncio
-import pytest
 from unittest.mock import patch
+
+import pytest
 from sqlalchemy import text
 
 from app.models.document import (
@@ -11,7 +13,6 @@ from app.models.document import (
     DOCUMENT_STATUS_PROCESSING,
     DOCUMENT_STATUS_QUEUED,
     DOCUMENT_STATUS_READY,
-    Document,
 )
 from app.models.user import User
 from app.services.rag_service import RAGService
@@ -23,20 +24,23 @@ _MAX_TEST_USER_ID = 99020
 
 def _ensure_test_users_exist(db):
     existing = set(
-        row[0] for row in db.execute(
+        row[0]
+        for row in db.execute(
             text("SELECT id FROM users WHERE id >= :min_id"),
             {"min_id": 99001},
         ).fetchall()
     )
     for uid in range(99001, _MAX_TEST_USER_ID + 1):
         if uid not in existing:
-            db.add(User(
-                id=uid,
-                username=f"ragtest_{uid}",
-                email=f"ragtest_{uid}@example.com",
-                hashed_password="hashed",
-                is_active=True,
-            ))
+            db.add(
+                User(
+                    id=uid,
+                    username=f"ragtest_{uid}",
+                    email=f"ragtest_{uid}@example.com",
+                    hashed_password="hashed",
+                    is_active=True,
+                )
+            )
     db.commit()
 
 

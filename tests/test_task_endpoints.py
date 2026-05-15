@@ -2,6 +2,7 @@
 任务 CRUD 端到端测试 (通过 API 接口)
 """
 
+
 def _create_user_and_get_token(client, suffix: str) -> str:
     email = f"task-{suffix}@example.com"
     password = "password123"
@@ -99,7 +100,8 @@ class TestTaskGet:
         token = _create_user_and_get_token(client, "get")
         headers = {"Authorization": f"Bearer {token}"}
         created = client.post(
-            "/api/v1/tasks/", headers=headers,
+            "/api/v1/tasks/",
+            headers=headers,
             json={"title": "获取测试"},
         )
         task_id = created.json()["id"]

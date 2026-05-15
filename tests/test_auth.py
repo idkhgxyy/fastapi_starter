@@ -8,25 +8,19 @@ def test_login_success(client):
     # 1. 准备测试数据：创建一个用户
     client.post(
         "/api/v1/users/",
-        json={
-            "username": "authuser",
-            "email": "auth@example.com",
-            "password": "authpassword"
-        },
+        json={"username": "authuser", "email": "auth@example.com", "password": "authpassword"},
     )
 
     # 2. 测试登录
     response = client.post(
         "/api/v1/auth/login",
-        data={
-            "username": "auth@example.com",
-            "password": "authpassword"
-        },
+        data={"username": "auth@example.com", "password": "authpassword"},
     )
     assert response.status_code == 200
     data = response.json()
     assert "access_token" in data
     assert data["token_type"] == "bearer"
+
 
 def test_login_wrong_password(client):
     """
@@ -34,13 +28,11 @@ def test_login_wrong_password(client):
     """
     response = client.post(
         "/api/v1/auth/login",
-        data={
-            "username": "auth@example.com",
-            "password": "wrongpassword"
-        },
+        data={"username": "auth@example.com", "password": "wrongpassword"},
     )
     assert response.status_code == 401
     assert response.json()["code"] == 1005
+
 
 def test_access_protected_route_without_token(client):
     """

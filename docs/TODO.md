@@ -66,83 +66,83 @@
   - 已完成：增加 `pgvector/pgvector:pg15` PostgreSQL service container 跑真实集成测试；独立 `docker-build` job 验证 Docker 构建；`pytest-cov` 覆盖率上报 + `coverage.xml` artifact 上传；`conftest.py` 支持 SQLite/PostgreSQL 双模式自动切换
   - 面试价值：展示 CI/CD 实践能力
 
-- [ ] **修复 Ollama 容器健康检查**
-  - 当前 `docker compose ps` 显示 ollama 为 `unhealthy`
-  - 建议：检查 healthcheck 命令在容器内是否可用（可能需要安装 curl 或改用 wget），或延长 `start_period`
+- [x] **修复 Ollama 容器健康检查** ✅ (2026-05-15)
+  - ~~当前 `docker compose ps` 显示 ollama 为 `unhealthy`~~
+  - 已完成：健康检查改用容器内置 `ollama list` 命令替代不存在的 `curl`，增加 `start_period: 30s` 和 `retries: 10`
   - 面试价值：细节体现工程素养
 
-- [ ] **Celery Worker 增加监控面板**
-  - 当前 Worker 没有任何可视化监控，任务失败只能看日志
-  - 建议：在 `docker-compose.yml` 中增加 `flower` 服务，端口 5555
+- [x] **Celery Worker 增加监控面板** ✅ (2026-05-15)
+  - ~~当前 Worker 没有任何可视化监控，任务失败只能看日志~~
+  - 已完成：在 `docker-compose.yml` 中增加 `flower` 服务（端口 5555），添加 `flower>=2.0.0` 依赖
   - 面试价值：展示对异步任务可观测性的理解
 
-- [ ] **增加 pytest-cov 覆盖率报告**
-  - 当前没有覆盖率统计，不知道测试覆盖了多少代码
-  - 建议：`pip install pytest-cov`，运行 `pytest --cov=app --cov-report=term`
+- [x] **增加 pytest-cov 覆盖率报告** ✅ (2026-05-14，CI 增强子项)
+  - ~~当前没有覆盖率统计，不知道测试覆盖了多少代码~~
+  - 已完成：CI 中已配置 `--cov=app --cov-report=term-missing --cov-report=xml`，`requirements-dev.txt` 已添加 `pytest-cov>=5.0.0`
   - 面试价值：数据化展示测试质量
 
-- [ ] **增加 CORS 中间件配置**
-  - 当前无 CORS 配置，前端分离开发时会遇到跨域问题
-  - 建议：在 `main.py` 中添加 `CORSMiddleware`，允许本地开发域名
+- [x] **增加 CORS 中间件配置** ✅ (2026-05-15)
+  - ~~当前无 CORS 配置，前端分离开发时会遇到跨域问题~~
+  - 已完成：在 `main.py` 中添加 `CORSMiddleware`，`config.py` 增加 `CORS_ORIGINS` 配置项，默认允许 localhost:3000/5173/8000
   - 面试价值：展示对浏览器安全模型的理解
 
-- [ ] **日志改为结构化 JSON 格式**
-  - 当前日志为纯文本格式，不利于 ELK / Loki 等日志系统采集
-  - 建议：使用 `python-json-logger` 或自定义 Formatter 输出 JSON
+- [x] **日志改为结构化 JSON 格式** ✅ (2026-05-15)
+  - ~~当前日志为纯文本格式，不利于 ELK / Loki 等日志系统采集~~
+  - 已完成：实现自定义 `JSONFormatter`，`config.py` 增加 `LOG_FORMAT` 配置项（text | json），`LOG_FORMAT=json` 时输出结构化 JSON 含 timestamp/level/logger/message/module/request_id/exception
   - 面试价值：展示对云原生可观测性的理解
 
-- [ ] **配置启动前校验**
-  - 当前启动时不检查 SECRET_KEY 是否仍为默认值、LLM_API_KEY 是否为空
-  - 建议：在 `lifespan` 中增加配置校验，不合规给出明确报错
+- [x] **配置启动前校验** ✅ (2026-05-15)
+  - ~~当前启动时不检查 SECRET_KEY 是否仍为默认值、LLM_API_KEY 是否为空~~
+  - 已完成：在 `lifespan` 中增加 `_validate_startup_config()`，SECRET_KEY 为默认值时拒绝启动，LLM_API_KEY 为空时警告（因 BYOK 架构允许用户级配置）
   - 面试价值：防止生产事故，展示防御性编程思维
 
-- [ ] **增加 pre-commit hooks**
-  - 当前无代码格式化/Lint 自动化
-  - 建议：`.pre-commit-config.yaml` 配置 black + isort + ruff
+- [x] **增加 pre-commit hooks** ✅ (2026-05-15)
+  - ~~当前无代码格式化/Lint 自动化~~
+  - 已完成：`.pre-commit-config.yaml` 配置 ruff (lint + format) + 通用 hooks（check-yaml/check-json/end-of-file-fixer/trailing-whitespace），`pyproject.toml` 配置 ruff 规则与 pytest，`requirements-dev.txt` 添加 `pre-commit>=4.0.0`
   - 面试价值：展示团队协作和代码规范意识
 
 ---
 
 ### 🟢 第三优先：功能扩展类（进一步提升项目深度，时间允许时做）
 
-- [ ] **增加更多 Tool Calling 工具函数**
-  - 当前仅 3 个工具（天气、创建任务、系统状态）
-  - 建议：增加「查询任务列表」「计算器」「搜索知识库」「发送邮件」等工具
+- [x] **增加更多 Tool Calling 工具函数** ✅ (2026-05-15)
+  - ~~当前仅 3 个工具（天气、创建任务、系统状态）~~
+  - 已完成：新增 `list_tasks`（查询任务列表，支持状态过滤）和 `calculate`（安全计算器，仅允许数学函数），共 5 个工具
   - 面试价值：展示 Agent 工具扩展能力
 
-- [ ] **健康检查接口增加依赖状态**
-  - 当前 `GET /api/health` 仅返回 `{"ok": true}`
-  - 建议：增加数据库连接状态、Redis 连接状态、Ollama 可用性检查
+- [x] **健康检查接口增加依赖状态** ✅ (2026-05-15)
+  - ~~当前 `GET /api/health` 仅返回 `{"ok": true}`~~
+  - 已完成：返回结构化依赖状态（database/redis/ollama），各自 status up/down + 详细信息，核心依赖异常时返回 503
   - 面试价值：展示对服务健康探针的理解
 
-- [ ] **增加用户密码修改接口**
-  - 当前仅有 `PUT /me/llm-config` 修改 LLM 配置，无密码修改入口
-  - 建议：`PUT /me/password`，需验证旧密码
+- [x] **增加用户密码修改接口** ✅ (2026-05-15)
+  - ~~当前仅有 `PUT /me/llm-config` 修改 LLM 配置，无密码修改入口~~
+  - 已完成：`PUT /me/password`，需验证旧密码，新密码哈希入库
   - 面试价值：完善用户体系
 
-- [ ] **增加压力测试脚本**
-  - 当前无性能基准
-  - 建议：用 `locust` 写一个简单的并发测试脚本，验证限流和系统承载能力
+- [x] **增加压力测试脚本** ✅ (2026-05-15)
+  - ~~当前无性能基准~~
+  - 已完成：`scripts/locustfile.py` 模拟用户登录 + 健康检查/个人信息/聊天/任务列表 多场景并发，`requirements-dev.txt` 添加 `locust>=2.30.0`
   - 面试价值：展示性能意识
 
-- [ ] **数据库备份脚本**
-  - 当前无任何备份恢复方案
-  - 建议：`scripts/backup_db.sh` (pg_dump) + `scripts/restore_db.sh`
+- [x] **数据库备份脚本** ✅ (2026-05-15)
+  - ~~当前无任何备份恢复方案~~
+  - 已完成：`scripts/backup_db.sh` (pg_dump + gzip) + `scripts/restore_db.sh` (gunzip + psql)，支持环境变量配置
   - 面试价值：运维基础
 
-- [ ] **RAG 支持多轮对话记忆**
-  - 当前每次 `/api/rag/query` 都是独立请求，无上下文记忆
-  - 建议：引入对话 session 概念，Redis 存储历史 messages
+- [x] **RAG 支持多轮对话记忆** ✅ (2026-05-15)
+  - ~~当前每次 `/api/rag/query` 都是独立请求，无上下文记忆~~
+  - 已完成：`RAGQueryRequest` 新增 `session_id` 可选字段，基于 Redis 存储会话历史（最大 20 轮，1 小时 TTL），支持 `/query` 和 `/query/stream` 两个端点
   - 面试价值：展示对对话系统设计的理解
 
-- [ ] **Embedding 维度改为可配置**
-  - 当前 `DocumentChunk.embedding` 中 `Vector(1024)` 硬编码
-  - 建议：从 settings 读取 `EMBEDDING_DIMENSION` 配置项
+- [x] **Embedding 维度改为可配置** ✅ (2026-05-15)
+  - ~~当前 `DocumentChunk.embedding` 中 `Vector(1024)` 硬编码~~
+  - 已完成：`config.py` 增加 `EMBEDDING_DIMENSION: int = 1024`，`document.py` 改用 `Vector(settings.EMBEDDING_DIMENSION)`
   - 面试价值：灵活性
 
-- [ ] **增加数据初始化和 Demo 种子数据**
-  - 当前启动后数据库为空，需要手动造数据
-  - 建议：`scripts/seed_demo_data.py` 自动创建 demo 用户、上传文档、创建任务
+- [x] **增加数据初始化和 Demo 种子数据** ✅ (2026-05-15)
+  - ~~当前启动后数据库为空，需要手动造数据~~
+  - 已完成：`scripts/seed_demo_data.py` 创建 demo 用户 (demo@example.com / demo123456)、欢迎文档（含嵌入向量占位）、3 个示例任务
   - 面试价值：面试官一键体验完整功能
 
 ---
@@ -163,8 +163,13 @@
 | ✅ 数据库迁移 | Alembic 自动升级 |
 | ✅ 统一异常处理 | AppException + 全局 handler |
 | ✅ Request ID 追踪 | 中间件注入 + 响应头返回 |
-| ✅ 单元测试 101 个 | 覆盖核心 Service/Router/Utils |
+| ✅ 单元测试 121 个 | 覆盖核心 Service/Router/Utils |
 | ✅ 项目文档 | README / CODE_WIKI / MVP 文档 / 变更记录 |
+| ✅ CI/CD 流水线 | GitHub Actions: test (PostgreSQL + pgvector) + docker-build + pytest-cov |
+| ✅ CORS 跨域 | CORSMiddleware + 可配置允许域名 |
+| ✅ 结构化日志 | JSONFormatter 可选 JSON 输出，适配 ELK/Loki |
+| ✅ 配置校验 | 启动时检查 SECRET_KEY 等关键配置 |
+| ✅ pre-commit hooks | ruff lint + format + 通用 hooks |
 
 ---
 

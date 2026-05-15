@@ -14,7 +14,7 @@ from app.services.llm_observability_service import (
     start_timer,
 )
 from app.services.llm_service import get_llm_client
-from app.services.rag_service import RAGService
+from app.services.rag_service import RAGService, append_session_message, load_session_history
 from app.utils.file_parser import get_supported_extensions, parse_file
 from app.worker.tasks import process_document_task
 
@@ -162,6 +162,14 @@ async def query_knowledge_base(
             {"role": "user", "content": request.query},
         ]
 
+        if request.session_id:
+            session_history = await load_session_history(current_user.id, request.session_id)
+            messages = (
+                [{"role": "system", "content": system_prompt}]
+                + session_history
+                + [{"role": "user", "content": request.query}]
+            )
+
         llm_client = get_llm_client()
         response = await llm_client.chat.completions.create(
             model=settings.LLM_MODEL_NAME,
@@ -170,6 +178,12 @@ async def query_knowledge_base(
         )
         response_text = response.choices[0].message.content
         prompt_tokens, completion_tokens, total_tokens = extract_usage(response)
+
+        if request.session_id:
+            await append_session_message(current_user.id, request.session_id, "user", request.query)
+            await append_session_message(
+                current_user.id, request.session_id, "assistant", response_text
+            )
         create_llm_call_log(
             db,
             user_id=current_user.id,
@@ -250,13 +264,25 @@ async def query_knowledge_base_stream(
     async def _stream():
         llm_client = get_llm_client()
         full_response = ""
+
+        stream_messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": request.query},
+        ]
+
+        if request.session_id:
+            session_history = await load_session_history(current_user.id, request.session_id)
+            await append_session_message(current_user.id, request.session_id, "user", request.query)
+            stream_messages = (
+                [{"role": "system", "content": system_prompt}]
+                + session_history
+                + [{"role": "user", "content": request.query}]
+            )
+
         try:
             response = await llm_client.chat.completions.create(
                 model=settings.LLM_MODEL_NAME,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": request.query},
-                ],
+                messages=stream_messages,
                 temperature=0.1,
                 stream=True,
             )
@@ -266,6 +292,12 @@ async def query_knowledge_base_stream(
                     full_response += content
                     data = json.dumps({"content": content}, ensure_ascii=False)
                     yield f"data: {data}\n\n"
+
+            if request.session_id and full_response:
+                await append_session_message(
+                    current_user.id, request.session_id, "assistant", full_response
+                )
+
             data = json.dumps({"source_chunks": source_chunk_contents}, ensure_ascii=False)
             yield f"data: {data}\n\n"
             yield "data: [DONE]\n\n"

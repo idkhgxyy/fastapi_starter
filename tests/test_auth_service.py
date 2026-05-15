@@ -1,9 +1,10 @@
 """
 Auth 服务层单元测试
 """
+
+from app.schemas.user import UserCreate
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
-from app.schemas.user import UserCreate
 
 
 class TestAuthService:

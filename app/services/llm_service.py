@@ -2,10 +2,12 @@ import json
 
 import psutil
 from openai import AsyncOpenAI
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.logging import logger
+from app.models.task import Task
 from app.models.user import User
 from app.schemas.task import TaskCreate
 from app.services.llm_observability_service import (
@@ -85,6 +87,37 @@ def get_system_status() -> str:
         return "无法获取系统状态信息。"
 
 
+def list_tasks(db: Session, user_id: int, status: str = None) -> str:
+    logger.info(f"==> 执行本地工具: 查询任务列表 (user_id={user_id}, status={status})")
+    try:
+        stmt = select(Task).where(Task.owner_id == user_id)
+        if status:
+            stmt = stmt.where(Task.status == status)
+        stmt = stmt.order_by(Task.created_at.desc()).limit(10)
+        tasks = list(db.scalars(stmt).all())
+        if not tasks:
+            return "当前没有任务。"
+        lines = []
+        for t in tasks:
+            lines.append(f"  - [ID:{t.id}] [{t.status}] {t.title}")
+            if t.description:
+                lines.append(f"    描述: {t.description}")
+        return "当前任务列表:\n" + "\n".join(lines)
+    except Exception as e:
+        logger.error(f"查询任务列表失败: {e}")
+        return "查询任务列表时发生错误。"
+
+
+def calculate(expression: str) -> str:
+    logger.info(f"==> 执行本地工具: 计算表达式 '{expression}'")
+    try:
+        allowed_names = {"abs": abs, "round": round, "min": min, "max": max, "pow": pow}
+        result = eval(expression, {"__builtins__": {}}, allowed_names)
+        return f"计算结果: {expression} = {result}"
+    except Exception as e:
+        return f"计算失败: {e}"
+
+
 # ==========================================
 # 2. 定义告诉大模型的工具 Schema (JSON Schema)
 # ==========================================
@@ -128,6 +161,43 @@ SYSTEM_STATUS_TOOL = {
         "name": "get_system_status",
         "description": "获取当前服务器的系统状态，包括 CPU 使用率、内存占用以及磁盘使用情况。如果用户询问服务器是否健康、负载高不高、系统状态等，请调用此工具。",
         "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+}
+
+LIST_TASKS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "list_tasks",
+        "description": "查询当前用户的待办任务列表。可以按状态过滤（pending/completed），不传参数则返回所有最近任务。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "description": "任务状态过滤，可选值: pending, completed",
+                    "enum": ["pending", "completed"],
+                },
+            },
+            "required": [],
+        },
+    },
+}
+
+CALCULATE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "calculate",
+        "description": "执行数学表达式计算，支持基本四则运算以及 abs、round、min、max、pow 函数。当用户需要进行数学计算时使用此工具。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "expression": {
+                    "type": "string",
+                    "description": "要计算的数学表达式，例如: 2 + 3 * 4, round(3.14159, 2), pow(2, 10)",
+                },
+            },
+            "required": ["expression"],
+        },
     },
 }
 
@@ -175,7 +245,13 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
         response = await llm_client.chat.completions.create(
             model=model_name,
             messages=messages,
-            tools=[WEATHER_TOOL, CREATE_TASK_TOOL, SYSTEM_STATUS_TOOL],  # 注入多个工具
+            tools=[
+                WEATHER_TOOL,
+                CREATE_TASK_TOOL,
+                SYSTEM_STATUS_TOOL,
+                LIST_TASKS_TOOL,
+                CALCULATE_TOOL,
+            ],  # 注入多个工具
             tool_choice="auto",
             temperature=0.1,  # 降低温度，减少乱码概率，提高指令遵循
             max_tokens=1000,
@@ -221,6 +297,16 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
 
                 elif function_name == "get_system_status":
                     tool_result = get_system_status()
+
+                elif function_name == "list_tasks":
+                    tool_result = list_tasks(
+                        db=db,
+                        user_id=current_user_id,
+                        status=arguments.get("status"),
+                    )
+
+                elif function_name == "calculate":
+                    tool_result = calculate(expression=arguments.get("expression", ""))
 
                 # 将工具的执行结果追加到上下文中
                 messages.append(

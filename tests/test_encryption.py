@@ -1,4 +1,4 @@
-from app.utils.encryption import encrypt_api_key, decrypt_api_key
+from app.utils.encryption import decrypt_api_key, encrypt_api_key
 
 
 class TestEncryptDecrypt:

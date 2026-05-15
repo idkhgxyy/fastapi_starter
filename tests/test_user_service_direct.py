@@ -1,8 +1,9 @@
 """
 User 服务层直接调用单元测试
 """
-from app.services.user_service import UserService
+
 from app.schemas.user import UserCreate, UserLLMConfigUpdate
+from app.services.user_service import UserService
 
 
 class TestUserService:
@@ -27,6 +28,7 @@ class TestUserService:
         )
         UserService.create_user(db_session, user_in)
         from app.utils.errors import AppException
+
         try:
             UserService.create_user(
                 db_session,
@@ -58,6 +60,7 @@ class TestUserService:
 
     def test_get_user_not_found_raises(self, db_session):
         from app.utils.errors import AppException
+
         try:
             UserService.get_user(db_session, 99999)
             assert False, "should have raised"

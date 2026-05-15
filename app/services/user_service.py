@@ -3,9 +3,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.logging import logger
-from app.core.security import get_password_hash
+from app.core.security import get_password_hash, verify_password
 from app.models.user import User
-from app.schemas.user import UserCreate, UserLLMConfigUpdate
+from app.schemas.user import PasswordUpdate, UserCreate, UserLLMConfigUpdate
 from app.utils.encryption import encrypt_api_key
 from app.utils.errors import AppException
 
@@ -104,4 +104,26 @@ class UserService:
 
         db.commit()
         db.refresh(user)
+        return user
+
+    @classmethod
+    def change_password(cls, db: Session, user_id: int, password_in: PasswordUpdate) -> User:
+        logger.info(f"Attempting to change password for user ID: {user_id}")
+        user = db.get(User, user_id)
+        if not user:
+            raise AppException(
+                code=1002, msg="User not found", status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        if not verify_password(password_in.old_password, user.hashed_password):
+            raise AppException(
+                code=1008,
+                msg="Old password is incorrect",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.hashed_password = get_password_hash(password_in.new_password)
+        db.commit()
+        db.refresh(user)
+        logger.info(f"Password changed successfully for user ID: {user_id}")
         return user

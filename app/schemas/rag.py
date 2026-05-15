@@ -20,6 +20,7 @@ class DocumentResponse(BaseModel):
 class RAGQueryRequest(BaseModel):
     query: str
     top_k: int = Field(3, ge=1, le=10)
+    session_id: Optional[str] = Field(None, description="会话 ID，用于多轮对话上下文记忆")
 
 
 class RAGQueryResponse(BaseModel):

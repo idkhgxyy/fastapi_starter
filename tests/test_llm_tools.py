@@ -1,7 +1,7 @@
 """
 LLM 本地工具函数单元测试 (get_current_weather, get_system_status)
 """
-from unittest.mock import patch
+
 
 from app.services.llm_service import get_current_weather, get_system_status
 
@@ -49,3 +49,41 @@ class TestSystemStatusTool:
         result = get_system_status()
         assert isinstance(result, str)
         assert len(result) > 0
+
+
+class TestCalculateTool:
+    def test_basic_arithmetic(self):
+        from app.services.llm_service import calculate
+
+        result = calculate("2 + 3 * 4")
+        assert "14" in result
+
+    def test_simple_addition(self):
+        from app.services.llm_service import calculate
+
+        result = calculate("1 + 1")
+        assert "2" in result
+
+    def test_round_function(self):
+        from app.services.llm_service import calculate
+
+        result = calculate("round(3.14159, 2)")
+        assert "3.14" in result
+
+    def test_pow_function(self):
+        from app.services.llm_service import calculate
+
+        result = calculate("pow(2, 10)")
+        assert "1024" in result
+
+    def test_invalid_expression(self):
+        from app.services.llm_service import calculate
+
+        result = calculate("1 / 0")
+        assert "计算失败" in result
+
+    def test_safety_no_builtins(self):
+        from app.services.llm_service import calculate
+
+        result = calculate("__import__('os').system('ls')")
+        assert "计算失败" in result
