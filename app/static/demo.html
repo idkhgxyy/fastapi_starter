@@ -573,7 +573,12 @@ async function sendMessage(e) {
             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: msg, stream: true })
         });
-        if (!r.ok) { indicator.remove(); appendMessage('ai', `请求出错: ${r.status}`); return; }
+        if (!r.ok) {
+            indicator.remove();
+            if (r.status === 401) { token = ''; localStorage.removeItem('agent_token'); updateAuthStatus(); appendMessage('ai', '登录已过期，请重新登录'); }
+            else appendMessage('ai', `请求出错: ${r.status}`);
+            return;
+        }
         indicator.remove();
         let fullText = '', reasoningText = '';
         const msgDiv = appendMessage('ai', '');
