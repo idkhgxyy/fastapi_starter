@@ -406,11 +406,16 @@ async def generate_chat_reply_stream(message: str, db: Session = None, current_u
         )
 
         async for chunk in response:
-            if chunk.choices and chunk.choices[0].delta.content:
-                content = chunk.choices[0].delta.content
-                # 按照 SSE 规范格式化数据
-                data = json.dumps({"content": content}, ensure_ascii=False)
-                yield f"data: {data}\n\n"
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if not delta:
+                continue
+            payload = {}
+            if getattr(delta, "reasoning_content", None):
+                payload["reasoning"] = delta.reasoning_content
+            if delta.content:
+                payload["content"] = delta.content
+            if payload:
+                yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
         yield "data: [DONE]\n\n"
 

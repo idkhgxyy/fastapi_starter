@@ -170,6 +170,14 @@
 | ✅ 结构化日志 | JSONFormatter 可选 JSON 输出，适配 ELK/Loki |
 | ✅ 配置校验 | 启动时检查 SECRET_KEY 等关键配置 |
 | ✅ pre-commit hooks | ruff lint + format + 通用 hooks |
+| ✅ 健康检查增强 | DB / Redis / Ollama 依赖状态探针 |
+| ✅ 密码修改 | PUT /me/password 旧密码验证 |
+| ✅ Tool Calling x5 | 天气 + 创建任务 + 系统状态 + 任务列表 + 计算器 |
+| ✅ 压力测试 | locust 多场景并发脚本 |
+| ✅ 数据库备份 | backup_db.sh + restore_db.sh |
+| ✅ RAG 多轮对话 | session_id + Redis 历史记忆 |
+| ✅ Embedding 维度可配 | EMBEDDING_DIMENSION 配置项 |
+| ✅ Demo 种子数据 | seed_demo_data.py 一键初始化 |
 
 ---
 

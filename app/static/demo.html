@@ -22,6 +22,19 @@
         .dot-typing:nth-child(3) { animation-delay: 0.4s; }
         @keyframes blink { 0% { opacity: .2; } 20% { opacity: 1; } 100% { opacity: .2; } }
         .status-badge { font-size: 0.65rem; padding: 1px 6px; border-radius: 9999px; }
+        .reasoning-box { background: #fef9e7; border-left: 3px solid #f59e0b; }
+        .dark .reasoning-box { background: #292524; border-left-color: #d97706; }
+        .msg-content p { margin-bottom: 0.5rem; }
+        .msg-content p:last-child { margin-bottom: 0; }
+        .msg-content ul { margin: 0.25rem 0; padding-left: 1.5rem; list-style: disc; }
+        .msg-content ol { margin: 0.25rem 0; padding-left: 1.5rem; list-style: decimal; }
+        .msg-content li { margin-bottom: 0.15rem; }
+        .msg-content h1 { font-size: 1.2rem; font-weight: 700; margin: 0.75rem 0 0.25rem; }
+        .msg-content h2 { font-size: 1.05rem; font-weight: 600; margin: 0.5rem 0 0.25rem; }
+        .msg-content h3 { font-size: 0.95rem; font-weight: 600; margin: 0.5rem 0 0.25rem; }
+        .msg-content pre { background: #1e293b; margin: 0.5rem 0; }
+        .msg-content pre code { color: #e2e8f0; padding: 12px 16px; border-radius: 8px; overflow-x: auto; font-size: 0.8rem; line-height: 1.5; display: block; }
+        .msg-content code { background: #334155; color: #e2e8f0; padding: 1px 4px; border-radius: 4px; font-size: 0.8rem; }
     </style>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 h-screen flex flex-col font-sans">
@@ -36,9 +49,15 @@
         <div id="auth-status" class="flex items-center gap-2 text-sm text-red-500">
             <span class="w-2 h-2 rounded-full bg-red-500"></span> 未认证
         </div>
-        <button onclick="toggleAuthModal('login')" class="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors border border-gray-300 dark:border-gray-600">登录</button>
-        <button onclick="toggleAuthModal('register')" class="text-sm px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors">注册</button>
-        <button onclick="toggleConfigModal()" id="config-btn" class="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors border border-gray-300 dark:border-gray-600 hidden">模型配置</button>
+        <span id="navbar-guest-btns">
+            <button onclick="toggleAuthModal('login')" class="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors border border-gray-300 dark:border-gray-600">登录</button>
+            <button onclick="toggleAuthModal('register')" class="text-sm px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors">注册</button>
+        </span>
+        <span id="navbar-user-btns" class="hidden items-center gap-2">
+            <span class="text-sm text-green-400 font-medium" id="nav-username-label">已登录</span>
+            <button onclick="toggleConfigModal()" class="text-sm px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors border border-gray-300 dark:border-gray-600">⚙️ 配置</button>
+            <button onclick="doLogout()" class="text-sm px-3 py-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors">退出</button>
+        </span>
     </div>
 </header>
 
@@ -315,14 +334,31 @@ async function saveLLMConfig() {
 
 function updateAuthStatus() {
     const s = document.getElementById('auth-status');
-    const c = document.getElementById('config-btn');
+    const guestBtns = document.getElementById('navbar-guest-btns');
+    const userBtns = document.getElementById('navbar-user-btns');
     if (token) {
         s.innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500"></span> <span class="text-green-600 dark:text-green-400">已认证</span>';
-        c.classList.remove('hidden');
+        guestBtns.classList.add('hidden');
+        userBtns.classList.remove('hidden');
+        userBtns.classList.add('inline-flex');
+        fetch('/api/v1/users/me', { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(r => r.json()).then(d => {
+                document.getElementById('nav-username-label').textContent = d.username || d.email || '用户';
+            }).catch(() => {});
     } else {
         s.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500"></span> 未认证';
-        c.classList.add('hidden');
+        guestBtns.classList.remove('hidden');
+        userBtns.classList.add('hidden');
+        userBtns.classList.remove('inline-flex');
     }
+}
+
+function doLogout() {
+    token = '';
+    localStorage.removeItem('agent_token');
+    updateAuthStatus();
+    document.getElementById('docs-list').innerHTML = '<li class="text-xs text-gray-400 text-center py-4">请先登录</li>';
+    document.getElementById('tasks-list').innerHTML = '<li class="text-xs text-gray-400 text-center py-4">请先登录</li>';
 }
 
 // === Knowledge Base ===
@@ -502,7 +538,7 @@ function appendMessage(role, text) {
         div.classList.add('flex-row-reverse');
         div.innerHTML = `<div class="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0 flex items-center justify-center text-gray-700 dark:text-white font-bold text-sm shadow-md">U</div><div class="flex-1 flex justify-end"><div class="bg-blue-600 text-white rounded-2xl rounded-tr-none px-5 py-3 shadow-sm inline-block max-w-[85%] text-sm whitespace-pre-wrap">${escapeHTML(text)}</div></div>`;
     } else {
-        div.innerHTML = `<div class="w-8 h-8 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow-md">AI</div><div class="flex-1"><div class="bg-white dark:bg-gray-800 rounded-2xl rounded-tl-none px-5 py-3 shadow-sm inline-block max-w-[85%] border border-gray-100 dark:border-gray-700 text-sm whitespace-pre-wrap">${formatMessage(text)}</div></div>`;
+        div.innerHTML = `<div class="w-8 h-8 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow-md">AI</div><div class="flex-1"><div class="msg-content bg-white dark:bg-gray-800 rounded-2xl rounded-tl-none px-5 py-3 shadow-sm inline-block max-w-[85%] border border-gray-100 dark:border-gray-700 text-sm">${formatMessage(text)}</div></div>`;
     }
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
@@ -535,16 +571,39 @@ async function sendMessage(e) {
         const r = await fetch('/api/v1/chat/', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: msg, stream: false })
+            body: JSON.stringify({ message: msg, stream: true })
         });
+        if (!r.ok) { indicator.remove(); appendMessage('ai', `请求出错: ${r.status}`); return; }
         indicator.remove();
-        if (r.ok) {
-            const d = await r.json();
-            appendMessage('ai', d.reply || d.message || d.response || '无回答内容');
-        } else {
-            const err = await r.text();
-            appendMessage('ai', `请求出错: ${r.status} - ${err}`);
+        let fullText = '', reasoningText = '';
+        const msgDiv = appendMessage('ai', '');
+        const contentDiv = msgDiv.querySelector('.msg-content');
+        const reasDiv = document.createElement('div');
+        reasDiv.className = 'reasoning-box text-xs text-amber-700 dark:text-amber-300 p-2 rounded-lg mb-2 hidden';
+        contentDiv.parentNode.insertBefore(reasDiv, contentDiv);
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const payload = line.slice(6).trim();
+                if (payload === '[DONE]') continue;
+                try {
+                    const obj = JSON.parse(payload);
+                    if (obj.reasoning) { reasoningText += obj.reasoning; reasDiv.textContent = '💭 ' + reasoningText; reasDiv.classList.remove('hidden'); }
+                    if (obj.content) { fullText += obj.content; contentDiv.innerHTML = formatMessage(fullText); }
+                    if (obj.error) { contentDiv.innerHTML = '<span class="text-red-400">错误: ' + escapeHTML(obj.error) + '</span>'; }
+                } catch(_) {}
+            }
+            document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
         }
+        if (!fullText) contentDiv.innerHTML = '<span class="text-gray-400">（无回复内容）</span>';
     } catch(err) {
         indicator.remove();
         appendMessage('ai', `网络错误: ${err.message}`);
@@ -564,8 +623,15 @@ function escapeHTML(str) {
 
 function formatMessage(str) {
     let h = escapeHTML(str);
+    h = h.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
     h = h.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     h = h.replace(/`([^`]+)`/g, '<code class="bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400 px-1 py-0.5 rounded text-xs">$1</code>');
+    h = h.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    h = h.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    h = h.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+    h = h.replace(/^\- (.+)$/gm, '<li>$1</li>');
+    h = h.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+    h = h.replace(/^---$/gm, '');
     return h;
 }
 </script>
