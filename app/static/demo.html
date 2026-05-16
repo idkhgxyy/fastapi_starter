@@ -153,7 +153,7 @@
                     <svg class="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                 </button>
             </form>
-            <div class="text-xs text-center text-gray-400 mt-2">Shift+Enter 换行 · 知识库问题请在左侧面板搜索</div>
+            <div class="text-xs text-center text-gray-400 mt-2">Enter 发送 · Shift+Enter 换行</div>
         </div>
     </section>
 </main>
@@ -224,6 +224,12 @@ const textarea = document.getElementById('chat-input');
 textarea.addEventListener('input', function() {
     this.style.height = 'auto';
     this.style.height = this.scrollHeight + 'px';
+});
+textarea.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
 });
 
 document.getElementById('rag-topk').addEventListener('input', function() {
