@@ -12,6 +12,7 @@ from app.api.middleware import RequestIDMiddleware
 from app.api.routers import auth, chat, health, observability, rag, tasks, users, worker
 from app.core.config import settings
 from app.core.logging import logger
+from app.db.base import Base
 from app.db.session import engine
 from app.utils.errors import AppException, app_exception_handler
 
@@ -46,6 +47,9 @@ async def lifespan(app: FastAPI):
             logger.info(f"Database connection successful! (Test query returned: {result.scalar()})")
     except Exception as e:
         logger.error(f"Database connection failed: {e}")
+
+    Base.metadata.create_all(bind=engine)
+    logger.info("Database tables ensured.")
 
     yield
 

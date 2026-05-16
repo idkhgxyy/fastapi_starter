@@ -261,8 +261,10 @@ async function doRegister() {
             document.getElementById('login-password').value = password;
             await doLogin();
         } else {
-            const d = await r.json();
-            alert('注册失败: ' + (d.detail || JSON.stringify(d)));
+            const text = await r.text();
+            let msg = text;
+            try { const d = JSON.parse(text); msg = d.detail || JSON.stringify(d); } catch(_) {}
+            alert('注册失败: ' + msg);
         }
     } catch(e) { alert('注册出错: ' + e.message); }
 }
