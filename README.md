@@ -204,14 +204,20 @@ Grafana 默认账号密码：
 
 ## 界面展示
 
-### 1. 前端对话与知识库问答 (RAG)
-![RAG Query Demo](docs/images/rag-query-demo.png)
+### 1. AI 对话与侧边栏
+| 对话界面 | 知识库管理 | 任务管理 |
+|:---:|:---:|:---:|
+| ![Chat with Sidebar](docs/images/chat-with-sidebar.png) | ![Knowledge Page](docs/images/knowledge-page.png) | ![Tasks Page](docs/images/tasks-page.png) |
 
-### 2. Swagger 接口文档 (深色模式)
-![Swagger Overview](docs/images/swagger-overview.png)
+### 2. 可观测性面板 & 系统监控
+| LLM 调用监控 | 系统健康 | 用户设置 |
+|:---:|:---:|:---:|
+| ![Observability](docs/images/observability-page.png) | ![Health](docs/images/health-page.png) | ![Settings](docs/images/settings-page.png) |
 
-### 3. Grafana 监控大盘
-![Grafana Dashboard](docs/images/grafana-dashboard.png)
+### 3. Swagger 接口文档 & Grafana 监控大盘
+| Swagger API 文档 | Grafana Dashboard |
+|:---:|:---:|
+| ![Swagger Overview](docs/images/swagger-overview.png) | ![Grafana Dashboard](docs/images/grafana-dashboard.png) |
 
 ## 关键接口示例
 ### 1. 登录
