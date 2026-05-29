@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import jwt
 from passlib.context import CryptContext
@@ -26,9 +27,6 @@ def get_password_hash(password: str) -> str:
     if len(password.encode("utf-8")) > 72:
         password = password[:72]
     return pwd_context.hash(password)
-
-
-from typing import Optional
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

@@ -25,6 +25,7 @@ async def get_llm_stats(
 
 @router.get("/llm-calls", response_model=list[LLMCallLogOut], summary="查看最近的 LLM 调用记录")
 async def list_llm_calls(
+    skip: int = Query(0, ge=0, description="跳过前 N 条记录（用于分页）"),
     limit: int = Query(20, ge=1, le=100, description="返回最近多少条日志"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
@@ -33,7 +34,7 @@ async def list_llm_calls(
     if not current_user.is_superuser:
         query = query.filter(LLMCallLog.user_id == current_user.id)
 
-    logs = query.order_by(LLMCallLog.created_at.desc()).limit(limit).all()
+    logs = query.order_by(LLMCallLog.created_at.desc()).offset(skip).limit(limit).all()
     return [
         LLMCallLogOut(
             id=log.id,

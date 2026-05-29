@@ -6,6 +6,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
+from redis.asyncio import Redis
 from sqlalchemy import text
 
 from app.api.middleware import RequestIDMiddleware
@@ -40,6 +41,7 @@ async def lifespan(app: FastAPI):
 
     _validate_startup_config()
 
+    # 数据库连接检查
     logger.info("Testing database connection...")
     try:
         with engine.connect() as connection:
@@ -48,8 +50,36 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Database connection failed: {e}")
 
+    # pgvector 扩展检查（RAG 功能必需）
+    logger.info("Checking pgvector extension...")
+    try:
+        with engine.connect() as connection:
+            row = connection.execute(
+                text("SELECT * FROM pg_extension WHERE extname = 'vector'")
+            ).fetchone()
+            if row:
+                logger.info("pgvector extension is installed.")
+            else:
+                logger.warning(
+                    "pgvector extension is NOT installed. RAG features (vector search) will not work. "
+                    "Run: CREATE EXTENSION vector;"
+                )
+    except Exception as e:
+        logger.warning(f"pgvector extension check failed (non-fatal): {e}")
+
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables ensured.")
+
+    # Redis 连通性检查
+    logger.info("Testing Redis connection...")
+    redis_client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
+    try:
+        await redis_client.ping()
+        logger.info("Redis connection successful!")
+    except Exception as e:
+        logger.warning(f"Redis connection failed: {e}. Rate limiting and task queue will not work.")
+    finally:
+        await redis_client.aclose()
 
     yield
 

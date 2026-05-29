@@ -104,6 +104,14 @@ class RAGService:
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
+    def delete_document(self, *, document_id: int, owner_id: int) -> Optional[Document]:
+        document = self.get_document_for_user(document_id=document_id, owner_id=owner_id)
+        if document is None:
+            return None
+        self.db.delete(document)
+        self.db.commit()
+        return document
+
     def has_ready_documents(self, *, owner_id: int) -> bool:
         stmt = select(func.count(Document.id)).where(
             Document.owner_id == owner_id,

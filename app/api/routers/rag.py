@@ -1,7 +1,7 @@
 import json
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, get_db
@@ -110,6 +110,23 @@ async def get_document(
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found.")
     return document
+
+
+@router.delete(
+    "/documents/{document_id}",
+    summary="删除指定文档（含已处理的向量块）",
+    tags=["RAG"],
+)
+async def delete_document(
+    document_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)
+):
+    rag_service = RAGService(db)
+    document = rag_service.delete_document(document_id=document_id, owner_id=current_user.id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    return JSONResponse(
+        content={"message": f"文档 '{document.filename}' 已删除", "document_id": document.id}
+    )
 
 
 @router.post(

@@ -1,15 +1,25 @@
+import asyncio
+import ast
 import json
+import operator
+from typing import Optional, Union
 
 import psutil
 from openai import AsyncOpenAI
+from openai import APIConnectionError, APIError, APITimeoutError, RateLimitError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tenacity import (
+    AsyncRetrying,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from app.core.config import settings
 from app.core.logging import logger
 from app.models.task import Task
 from app.models.user import User
-from app.schemas.task import TaskCreate
 from app.services.llm_observability_service import (
     create_llm_call_log,
     elapsed_ms,
@@ -17,19 +27,89 @@ from app.services.llm_observability_service import (
     serialize_tool_calls,
     start_timer,
 )
-from app.services.task_service import TaskService
+from app.services.mcp_service import MCPService
 from app.utils.encryption import decrypt_api_key
 
 # 全局复用一个 AsyncOpenAI 客户端 (针对未配置自有 Key 的情况)
 _global_client = None
 
 
-def get_llm_client(user: User = None) -> tuple[AsyncOpenAI, str]:
+# ==========================================
+# MockLLMClient — 无需 API Key 的模拟客户端
+# ==========================================
+class _MockUsage:
+    prompt_tokens = 10
+    completion_tokens = 20
+    total_tokens = 30
+
+
+class _MockDelta:
+    def __init__(self, content: str = "", reasoning_content: str = None):
+        self.content = content
+        self.reasoning_content = reasoning_content
+
+
+class _MockChoice:
+    def __init__(self, delta: _MockDelta = None, message_content: str = ""):
+        if delta is not None:
+            self.delta = delta
+        else:
+            self.message = _MockMessage(content=message_content)
+
+
+class _MockMessage:
+    def __init__(self, content: str):
+        self.content = content
+        self.tool_calls = None
+
+
+class _MockChunk:
+    def __init__(self, delta: _MockDelta):
+        self.choices = [_MockChoice(delta=delta)]
+
+
+class _MockResponse:
+    def __init__(self, content: str):
+        self.choices = [_MockChoice(message_content=content)]
+        self.usage = _MockUsage()
+
+
+class _MockChatCompletions:
+    async def create(self, model: str, messages: list, **kwargs) -> _MockResponse:
+        stream = kwargs.get("stream", False)
+        if stream:
+            return self._stream_response()
+        return _MockResponse(content="这是 Mock 模式的回复。系统正以离线演示模式运行，未连接真实 LLM API。你可以继续体验对话流程，但所有回复均为预设内容。")
+
+    async def _stream_response(self):
+        content = "这是 Mock 模式下的流式回复，用于演示目的。系统当前运行在 Mock 模式，未连接真实 LLM API。"
+        for char in content:
+            yield _MockChunk(delta=_MockDelta(content=char))
+            await asyncio.sleep(0.01)
+        yield _MockChunk(delta=_MockDelta(content=""))
+
+
+class _MockChat:
+    completions = _MockChatCompletions()
+
+
+class MockLLMClient:
+    """模拟 LLM 客户端，返回预设回复，无需 API Key"""
+    chat = _MockChat()
+    api_key = "mock"
+
+
+def get_llm_client(user: User = None) -> tuple[Union[AsyncOpenAI, MockLLMClient], str]:
     """
     动态获取 LLM 客户端和模型名称。
     优先使用用户自定义的配置（支持多租户独立 Key），若用户未配置，则回退到系统全局配置。
+    当 LLM_MOCK=true 时，返回 MockLLMClient，无需任何 API Key。
     返回 (client, model_name)
     """
+    if settings.LLM_MOCK:
+        logger.info("==> LLM Mock 模式已开启，使用模拟客户端")
+        return MockLLMClient(), "mock-model"
+
     if user and user.has_custom_llm_key:
         # 用户有自定义配置，使用用户的
         api_key = decrypt_api_key(user.llm_api_key_encrypted)
@@ -108,98 +188,92 @@ def list_tasks(db: Session, user_id: int, status: str = None) -> str:
         return "查询任务列表时发生错误。"
 
 
+_ALLOWED_OPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.Pow: operator.pow,
+    ast.Mod: operator.mod,
+    ast.FloorDiv: operator.floordiv,
+    ast.USub: operator.neg,
+}
+
+_ALLOWED_FUNCS = {
+    "abs": abs,
+    "round": round,
+    "min": min,
+    "max": max,
+    "pow": pow,
+}
+
+
+def _safe_eval_node(node: ast.AST) -> float:
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, (int, float)):
+            return node.value
+        raise ValueError(f"不支持的常量类型: {type(node.value).__name__}")
+
+    elif isinstance(node, ast.BinOp):
+        op_type = type(node.op)
+        if op_type not in _ALLOWED_OPS:
+            raise ValueError(f"不支持的运算符: {op_type.__name__}")
+        left = _safe_eval_node(node.left)
+        right = _safe_eval_node(node.right)
+        return _ALLOWED_OPS[op_type](left, right)
+
+    elif isinstance(node, ast.UnaryOp):
+        op_type = type(node.op)
+        if op_type not in _ALLOWED_OPS:
+            raise ValueError(f"不支持的运算符: {op_type.__name__}")
+        operand = _safe_eval_node(node.operand)
+        return _ALLOWED_OPS[op_type](operand)
+
+    elif isinstance(node, ast.Call):
+        if not isinstance(node.func, ast.Name):
+            raise ValueError("只允许直接函数名调用")
+        func_name = node.func.id
+        if func_name not in _ALLOWED_FUNCS:
+            raise ValueError(f"不支持的函数: {func_name}")
+        args = [_safe_eval_node(arg) for arg in node.args]
+        return _ALLOWED_FUNCS[func_name](*args)
+
+    else:
+        raise ValueError(f"不支持的表达式类型: {type(node).__name__}")
+
+
+def safe_eval(expr: str) -> float:
+    """安全计算数学表达式，使用 AST 而非 eval()"""
+    node = ast.parse(expr.strip(), mode="eval").body
+    return _safe_eval_node(node)
+
+
 def calculate(expression: str) -> str:
     logger.info(f"==> 执行本地工具: 计算表达式 '{expression}'")
     try:
-        allowed_names = {"abs": abs, "round": round, "min": min, "max": max, "pow": pow}
-        result = eval(expression, {"__builtins__": {}}, allowed_names)
+        result = safe_eval(expression)
         return f"计算结果: {expression} = {result}"
     except Exception as e:
         return f"计算失败: {e}"
 
 
-# ==========================================
-# 2. 定义告诉大模型的工具 Schema (JSON Schema)
-# ==========================================
-WEATHER_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "get_current_weather",
-        "description": "获取指定城市的当前天气情况",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "location": {"type": "string", "description": "城市名称，例如：北京、上海"}
-            },
-            "required": ["location"],
-        },
-    },
-}
+# 工具 Schema 与处理器已统一托管于 MCPService
+# 新增工具时只需在 mcp_service.py 中注册即可
 
-CREATE_TASK_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "create_task",
-        "description": "为当前用户创建一个新的待办任务",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "title": {"type": "string", "description": "任务标题，必须简明扼要"},
-                "description": {
-                    "type": "string",
-                    "description": "任务的详细描述，如果用户没有提供，可以根据上下文生成或者留空",
-                },
-            },
-            "required": ["title"],
-        },
-    },
-}
 
-SYSTEM_STATUS_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "get_system_status",
-        "description": "获取当前服务器的系统状态，包括 CPU 使用率、内存占用以及磁盘使用情况。如果用户询问服务器是否健康、负载高不高、系统状态等，请调用此工具。",
-        "parameters": {"type": "object", "properties": {}, "required": []},
-    },
-}
-
-LIST_TASKS_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "list_tasks",
-        "description": "查询当前用户的待办任务列表。可以按状态过滤（pending/completed），不传参数则返回所有最近任务。",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "status": {
-                    "type": "string",
-                    "description": "任务状态过滤，可选值: pending, completed",
-                    "enum": ["pending", "completed"],
-                },
-            },
-            "required": [],
-        },
-    },
-}
-
-CALCULATE_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "calculate",
-        "description": "执行数学表达式计算，支持基本四则运算以及 abs、round、min、max、pow 函数。当用户需要进行数学计算时使用此工具。",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "expression": {
-                    "type": "string",
-                    "description": "要计算的数学表达式，例如: 2 + 3 * 4, round(3.14159, 2), pow(2, 10)",
-                },
-            },
-            "required": ["expression"],
-        },
-    },
-}
+async def _llm_completion_with_retry(llm_client, **kwargs):
+    """LLM API 调用，带指数退避重试（应对 429 限流和临时网络问题）"""
+    async for attempt in AsyncRetrying(
+        retry=retry_if_exception_type((RateLimitError, APITimeoutError, APIConnectionError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        before_sleep=lambda retry_state: logger.warning(
+            f"LLM API 调用失败 (第 {retry_state.attempt_number} 次重试): "
+            f"{retry_state.outcome.exception()}"
+        ),
+    ):
+        with attempt:
+            return await llm_client.chat.completions.create(**kwargs)
 
 
 async def generate_chat_reply(message: str, db: Session = None, current_user_id: int = None) -> str:
@@ -242,18 +316,13 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
         )
         messages[0]["content"] = system_prompt
 
-        response = await llm_client.chat.completions.create(
+        response = await _llm_completion_with_retry(
+            llm_client,
             model=model_name,
             messages=messages,
-            tools=[
-                WEATHER_TOOL,
-                CREATE_TASK_TOOL,
-                SYSTEM_STATUS_TOOL,
-                LIST_TASKS_TOOL,
-                CALCULATE_TOOL,
-            ],  # 注入多个工具
+            tools=MCPService.list_tools(),
             tool_choice="auto",
-            temperature=0.1,  # 降低温度，减少乱码概率，提高指令遵循
+            temperature=0.1,
             max_tokens=1000,
         )
 
@@ -274,39 +343,31 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
                 arguments = json.loads(tool_call.function.arguments)
 
                 tool_result = ""
-                if function_name == "get_current_weather":
-                    location = arguments.get("location")
-                    tool_result = get_current_weather(location=location)
-
-                elif function_name == "create_task":
-                    # 拦截到创建任务的请求，调用真实的服务层写入数据库！
+                if function_name == "create_task":
                     logger.info(f"==> 模型尝试创建任务: {arguments}")
                     if db and current_user_id:
-                        task_in = TaskCreate(
-                            title=arguments.get("title"),
-                            description=arguments.get("description", ""),
-                        )
-                        created_task = TaskService.create_task(
-                            db=db, task_in=task_in, owner_id=current_user_id
-                        )
-                        tool_result = (
-                            f"任务创建成功！任务ID: {created_task.id}, 标题: {created_task.title}"
+                        tool_result = await MCPService.call_tool(
+                            name=function_name,
+                            arguments=arguments,
+                            db=db,
+                            user_id=current_user_id,
                         )
                     else:
                         tool_result = "任务创建失败：未获取到数据库连接或用户登录状态。"
 
-                elif function_name == "get_system_status":
-                    tool_result = get_system_status()
-
                 elif function_name == "list_tasks":
-                    tool_result = list_tasks(
+                    tool_result = await MCPService.call_tool(
+                        name=function_name,
+                        arguments=arguments,
                         db=db,
                         user_id=current_user_id,
-                        status=arguments.get("status"),
                     )
 
-                elif function_name == "calculate":
-                    tool_result = calculate(expression=arguments.get("expression", ""))
+                else:
+                    tool_result = await MCPService.call_tool(
+                        name=function_name,
+                        arguments=arguments,
+                    )
 
                 # 将工具的执行结果追加到上下文中
                 messages.append(
@@ -320,8 +381,12 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
 
             # 第二轮调用
             logger.info("==> [Round 2] 工具结果已返回，正在请求大模型生成最终回答...")
-            second_response = await llm_client.chat.completions.create(
-                model=model_name, messages=messages, temperature=0.7, max_tokens=1000
+            second_response = await _llm_completion_with_retry(
+                llm_client,
+                model=model_name,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1000,
             )
             prompt_tokens, completion_tokens, used_tokens = extract_usage(second_response)
             total_prompt_tokens += prompt_tokens

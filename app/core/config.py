@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     LLM_INPUT_PRICE_PER_1K_TOKENS: float = 0.0
     LLM_OUTPUT_PRICE_PER_1K_TOKENS: float = 0.0
 
+    # Mock 模式 — 开启后 LLM 调用返回预设回复，无需 API Key
+    LLM_MOCK: bool = False
+
     # RAG 配置
     EMBEDDING_DIMENSION: int = 1024
 
