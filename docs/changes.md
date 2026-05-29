@@ -129,3 +129,21 @@
 - 验证：
   - `python3 -m pytest -q` → 119 passed
   - Live API: .txt / .md / .pdf 上传均返回 202 + 正确 file_type，.png 返回 400
+
+## 2026-05-28 ~ 2026-05-29
+
+### 全功能 React SPA 前端
+- 目标：为后端构建一个完整的现代化前端界面，覆盖后端全部 API 端点，提供面试级的前端代码质量。
+- 主要改动：
+  - 新建 `frontend/` 目录，基于 Vite 8 + React 18 + TypeScript strict 模式
+  - Tailwind CSS v4 + CSS 变量双主题体系（深色/浅色）
+  - 8 个独立路由页面：`/auth/login`、`/auth/register`、`/chat`、`/knowledge`、`/tasks`、`/observability`、`/settings`、`/health`
+  - **Chat 核心**：SSE 流式渲染（fetch + ReadableStream）、useChat Hook、MessageList（Markdown/推理折叠/ToolCallCard）、自动增高 ChatInput
+  - **侧边栏**：抽屉式布局（桌面/移动端均可折叠）、知识库面板（上传文档/列表/删除/RAG搜索）、任务面板（创建/状态切换/删除）
+  - **可观测性面板**：Recharts 折线图/柱状图、统计卡片、LLM 调用日志表格 + 详情 Modal
+  - **Mock 数据层**：`VITE_USE_MOCK=true` 切换，axios 请求拦截器级别模拟，零网络请求零错误日志
+  - **全局 ErrorBoundary** 包裹应用
+  - 7 个 API Service、2 个 Context（Auth/Theme）、18 个 SVG 图标组件
+  - 设计体系：Plus Jakarta Sans + JetBrains Mono 字体、品牌色 indigo (#6366f1)、surface 灰度色板
+  - CLAUDE.md 同步新增前端设计准则
+- 验证：`npx tsc --noEmit` → 0 errors, `npx vite build` → 920 modules 构建通过
