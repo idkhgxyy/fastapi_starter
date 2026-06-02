@@ -22,10 +22,10 @@ const mockDocuments: Document[] = [
 ]
 
 const mockTasks: Task[] = [
-  { id: 1, title: '完成前端登录页开发', description: '实现邮箱+密码登录表单，含表单校验和错误提示', status: 'done', created_at: daysAgo(5), updated_at: daysAgo(2) },
+  { id: 1, title: '完成前端登录页开发', description: '实现邮箱+密码登录表单，含表单校验和错误提示', status: 'completed', created_at: daysAgo(5), updated_at: daysAgo(2) },
   { id: 2, title: '对接 SSE 流式接口', description: '实现 fetch + ReadableStream 解析，支持打字机效果', status: 'in_progress', created_at: daysAgo(3), updated_at: daysAgo(1) },
   { id: 3, title: '搭建可观测性面板', description: '集成 Recharts 图表，展示 LLM 调用统计', status: 'in_progress', created_at: daysAgo(1), updated_at: NOW },
-  { id: 4, title: '编写单元测试', description: '', status: 'todo', created_at: NOW, updated_at: NOW },
+  { id: 4, title: '编写单元测试', description: '', status: 'pending', created_at: NOW, updated_at: NOW },
 ]
 
 function generateDailyStats(days: number) {
@@ -106,7 +106,7 @@ const MOCK_RESPONSES: MockEntry[] = [
   { method: 'GET', path: '/tasks/', handler: () => mockTasks },
   { method: 'POST', path: '/tasks/', handler: (data) => {
     const d = data as { title: string; description?: string }
-    const task: Task = { id: Date.now(), title: d.title, description: d.description || null, status: 'todo', created_at: NOW, updated_at: NOW }
+    const task: Task = { id: Date.now(), title: d.title, description: d.description || null, status: 'pending', created_at: NOW, updated_at: NOW }
     return task
   }},
   { method: 'PUT', path: '/tasks/', handler: (data) => data },

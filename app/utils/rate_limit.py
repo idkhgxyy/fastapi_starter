@@ -1,3 +1,4 @@
+import hashlib
 import time
 import uuid
 
@@ -23,7 +24,7 @@ class RateLimiter:
         # 优先使用 Authorization Token 的 hash 或者 IP 作为限流 key
         auth_header = request.headers.get("Authorization")
         if auth_header:
-            client_id = hash(auth_header)
+            client_id = hashlib.sha256(auth_header.encode()).hexdigest()[:16]
         else:
             client_id = request.client.host if request.client else "unknown"
 

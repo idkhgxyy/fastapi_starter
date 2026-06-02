@@ -43,7 +43,7 @@ export default function TasksPanel() {
   }
 
   async function handleToggleStatus(task: Task) {
-    const nextStatus = task.status === 'todo' ? 'in_progress' : task.status === 'in_progress' ? 'done' : 'todo'
+    const nextStatus = task.status === 'pending' ? 'in_progress' : task.status === 'in_progress' ? 'completed' : 'pending'
     try {
       await updateTask(task.id, { status: nextStatus })
       await loadTasks()
@@ -146,7 +146,7 @@ function TaskCard({ task, onToggleStatus, onDelete }: { task: Task; onToggleStat
           onClick={onToggleStatus}
           className="flex-1 text-left"
         >
-          <p className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-[var(--text-tertiary)]' : 'text-[var(--text-primary)]'}`}>
+          <p className={`text-sm font-medium ${task.status === 'completed' ? 'line-through text-[var(--text-tertiary)]' : 'text-[var(--text-primary)]'}`}>
             {task.title}
           </p>
           {task.description && (

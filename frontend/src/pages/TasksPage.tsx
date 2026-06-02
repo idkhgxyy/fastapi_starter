@@ -5,13 +5,13 @@ import { listTasks, createTask, updateTask, deleteTask } from '@/services/taskSe
 import TaskStatusBadge from '@/components/tasks/TaskStatusBadge'
 import { IconPlus, IconTrash, IconX } from '@/components/ui/Icons'
 
-type FilterKey = 'all' | 'todo' | 'in_progress' | 'done'
+type FilterKey = 'all' | 'pending' | 'in_progress' | 'completed'
 
 const filterLabels: Record<FilterKey, string> = {
   all: '全部',
-  todo: '待办',
+  pending: '待办',
   in_progress: '进行中',
-  done: '已完成',
+  completed: '已完成',
 }
 
 export default function TasksPage() {
@@ -53,7 +53,7 @@ export default function TasksPage() {
   }
 
   async function handleToggleStatus(task: Task) {
-    const nextStatus: Task['status'] = task.status === 'todo' ? 'in_progress' : task.status === 'in_progress' ? 'done' : 'todo'
+    const nextStatus: Task['status'] = task.status === 'pending' ? 'in_progress' : task.status === 'in_progress' ? 'completed' : 'pending'
     try {
       await updateTask(task.id, { status: nextStatus })
       await loadTasks()
@@ -151,15 +151,15 @@ export default function TasksPage() {
                   <button onClick={() => handleToggleStatus(task)} className="flex-1 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                        task.status === 'done' ? 'border-[var(--color-success)] bg-[var(--color-success)]' : 'border-[var(--text-tertiary)]'
+                        task.status === 'completed' ? 'border-[var(--color-success)] bg-[var(--color-success)]' : 'border-[var(--text-tertiary)]'
                       }`}>
-                        {task.status === 'done' && (
+                        {task.status === 'completed' && (
                           <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="20 6 9 17 4 12" />
                           </svg>
                         )}
                       </div>
-                      <p className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-[var(--text-tertiary)]' : 'text-[var(--text-primary)]'}`}>
+                      <p className={`text-sm font-medium ${task.status === 'completed' ? 'line-through text-[var(--text-tertiary)]' : 'text-[var(--text-primary)]'}`}>
                         {task.title}
                       </p>
                     </div>
