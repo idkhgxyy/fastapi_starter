@@ -147,3 +147,29 @@
   - 设计体系：Plus Jakarta Sans + JetBrains Mono 字体、品牌色 indigo (#6366f1)、surface 灰度色板
   - CLAUDE.md 同步新增前端设计准则
 - 验证：`npx tsc --noEmit` → 0 errors, `npx vite build` → 920 modules 构建通过
+
+## 2026-06-08
+
+### README 面试官视角优化
+- 目标：移除 README 中对面试官暴露的面试准备内容和内部开发流程。
+- 主要改动：
+  - 重写开头描述为专业英文一句话简介，移除"面向实习/校招场景"等自曝式措辞
+  - 删除"适合怎么写进简历"板块（含简历定位建议和 `resume_project.md` 链接）
+  - 删除"后续可继续优化"板块（暴露项目未完成的 roadmap）
+  - 删除"维护约定"板块（内部开发流程文档）
+  - 新增"About This Project"板块，用英文专业方式总结核心能力
+- 验证：文件完整性检查通过
+
+### 文档清理与整合
+- 目标：清理 docs/ 目录中的过期和冗余文档，使文档与当前项目状态（含完整 React SPA 前端 + MCP 协议层）对齐。
+- 主要改动：
+  - **删除** `docs/TODO.md`：所有 22 项待办已全部完成，内容与 PROJECT_REVIEW.md 重叠
+  - **删除** `docs/resume_project_final_short.md`：内容已合并入 `resume_project.md`
+  - **删除** `docs/IMPROVEMENT_SUGGESTIONS.md`：95% 建议已落地，剩余条目为次要意见
+  - **更新** `docs/resume_project.md`：合并压缩版内容，新增"全栈"定位，体现 React 前端和 MCP 协议
+  - **更新** `docs/PROJECT_REVIEW.md`：修正"缺少前端/Demo 简陋"等过期评价；标注已完成的改进项
+  - **更新** `docs/CODE_WIKI.md`：新增 `frontend/` 目录结构、`mcp_service.py` 模块文档、前端访问入口
+  - **更新** `docs/project_mvp.md`：将已实现的"前端/BYOK/SSE/MCP"从"不必强求"移至"已超出 MVP"
+  - **更新** `docs/FRONTEND_PRD.md`：顶部添加历史文档标注
+  - **更新** `README.md`：移除对已删除文件的引用
+- 验证：所有引用一致性检查通过

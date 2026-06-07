@@ -6,7 +6,7 @@
 
 ### 核心特性
 
-- **LLM Agent 与工具调用**：支持阻塞和流式对话（SSE），基于兼容 OpenAI 接口的大模型（推荐 Qwen2.5），支持通过 Tool Calling 拦截用户意图并执行本地方法（天气查询、创建任务、系统状态查询、任务列表查询、数学计算）。
+- **LLM Agent 与工具调用**：支持阻塞和流式对话（SSE），基于兼容 OpenAI 接口的大模型（推荐 Qwen2.5），通过 MCP 协议统一管理 5 个工具（天气查询、创建任务、系统状态查询、任务列表查询、数学计算），支持 Tool Calling 多轮调用。LLM API 调用自带指数退避重试机制（tenacity）。提供 MockLLMClient 离线演示模式。
 - **RAG 知识库检索**：集成 `pgvector` 向量数据库与 LangChain 文本切分器，实现文档上传、分块、Embedding 向量化以及基于 BGE-Reranker 的高精度交叉重排。
 - **多格式文档上传**：支持 `.txt` / `.md` / `.pdf` 格式的文档解析、异步切分与向量化。
 - **多轮对话记忆**：基于 Redis 的 RAG 会话历史管理，支持上下文持续的问答体验。
@@ -15,6 +15,7 @@
 - **鉴权与权限**：基于 JWT 的认证体系，使用 bcrypt 进行密码哈希，支持用户级数据隔离和超级管理员权限。
 - **可观测性体系**：集成 Prometheus 收集 API 指标，通过 Grafana 提供可视化看板；在数据库中记录 LLM 调用的详细日志（Token 消耗、延迟、成本、成功率等）。
 - **工程化保障**：Alembic 数据库迁移、pre-commit hooks（ruff 格式化和 lint）、GitHub Actions CI（PostgreSQL 集成测试 + Docker 构建）、121 个单元测试。
+- **前端应用**：React + TypeScript SPA，SSE 流式聊天、可观测性面板、Mock 离线模式。详见 [frontend/README.md](../frontend/README.md)。
 - **限流保护**：基于 Redis ZSET 的滑动窗口限流，Redis 不可用时自动降级。
 
 ### 项目定位（MVP）
@@ -137,6 +138,7 @@ fastapi_starter/
 │   │   ├── auth_service.py          # 用户认证
 │   │   ├── llm_service.py           # LLM Agent (对话 + Tool Calling)
 │   │   ├── llm_observability_service.py # LLM 调用日志与统计
+│   │   ├── mcp_service.py           # MCP 协议工具层（注册/发现/调度）
 │   │   ├── rag_service.py           # RAG 知识库 (文档处理/检索/会话管理)
 │   │   ├── task_service.py          # 任务管理 CRUD
 │   │   └── user_service.py          # 用户管理 CRUD + LLM 配置
@@ -158,10 +160,24 @@ fastapi_starter/
 ├── docs/                   # 项目文档
 │   ├── images/             # 截图资源
 │   ├── CODE_WIKI.md        # 本文档
-│   ├── TODO.md             # 待办清单
 │   ├── changes.md          # 变更记录
+│   ├── FRONTEND_PRD.md     # 前端 PRD（开发前规格）
+│   ├── PROJECT_REVIEW.md   # 项目评审报告
 │   ├── project_mvp.md      # MVP 说明
-│   └── resume_project*.md  # 简历文案
+│   └── resume_project.md   # 简历文案
+├── frontend/               # React SPA 前端应用
+│   ├── src/
+│   │   ├── components/     # UI 组件（auth/chat/knowledge/layout/observability/tasks/ui）
+│   │   ├── contexts/       # AuthContext + ThemeContext
+│   │   ├── hooks/          # useChat（SSE 流式 Hook）
+│   │   ├── mock/           # Mock 数据层（全 API 覆盖）
+│   │   ├── pages/          # 8 个路由页面
+│   │   ├── services/       # 7 个 API Service 模块
+│   │   └── types/          # TypeScript 类型定义
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.ts      # Vite 配置（含 API 代理 + Mock 模式）
+│   └── tsconfig.json       # TypeScript strict 模式
 ├── grafana/                # Grafana Provisioning
 │   ├── dashboards/         # FastAPI 监控面板 JSON
 │   └── provisioning/       # 数据源与面板自动配置
@@ -243,14 +259,15 @@ fastapi_starter/
 
 ### 4.4 LLM & Agent 模块 (`app/services/llm_service.py`)
 
-- **核心职责**：处理与大模型的交互对话，封装工具定义（JSON Schema），解析模型响应中的 `tool_calls`
+- **核心职责**：处理与大模型的交互对话，工具调用委托给 MCPService 统一调度。
 - **多轮调用链路**：
-  1. **Round 1**：携带系统 Prompt + 5 个工具定义请求 LLM
-  2. **Tool Execution**：解析 `response_message.tool_calls`，本地反射执行具体业务代码
+  1. **Round 1**：携带系统 Prompt + MCPService 提供的 5 个工具定义请求 LLM
+  2. **Tool Execution**：解析 `response_message.tool_calls`，通过 MCPService.call_tool() 统一路由执行
   3. **Round 2**：组装工具执行结果，再次请求大模型生成自然语言回复
   4. **日志记录**：在流转末尾调用 `create_llm_call_log` 记录请求、响应与 Token 消耗
-- **多租户客户端管理**：通过 `get_llm_client(user)` 函数，优先使用用户自定义的 LLM 配置（BYOK），未配置时回退到系统全局配置
+- **多租户客户端管理**：通过 `get_llm_client(user)` 函数，优先使用用户自定义的 LLM 配置（BYOK），未配置时回退到系统全局配置；开启 `LLM_MOCK=true` 时使用 MockLLMClient
 - **SSE 流式支持**：`generate_chat_reply_stream()` 异步生成器，支持 `reasoning_content`（思考链）和 `content` 双字段推送
+- **容错机制**：`_llm_completion_with_retry()` 使用 tenacity 实现指数退避重试，应对 429 限流和临时网络问题
 
 **定义的 5 个工具：**
 
@@ -260,9 +277,18 @@ fastapi_starter/
 | `create_task` | 创建待办任务（写入数据库） | `TaskService.create_task()` |
 | `get_system_status` | 查询服务器 CPU/内存/磁盘状态 | `get_system_status()` (psutil) |
 | `list_tasks` | 查询当前用户任务列表 | `list_tasks(db, user_id, status)` |
-| `calculate` | 安全数学表达式计算 | `calculate(expression)` (安全 eval) |
+| `calculate` | 安全数学表达式计算 | `calculate(expression)` (AST 安全 eval) |
 
-### 4.5 RAG 知识库模块 (`app/services/rag_service.py`)
+### 4.5 MCP 协议工具层 (`app/services/mcp_service.py`)
+
+- **核心职责**：将系统内部工具封装为标准 MCP（Model Context Protocol）Tool 接口，提供统一的注册、发现与调用机制。
+- **工具注册**：`_MCP_TOOL_DEFINITIONS` 集中定义 5 个工具的 OpenAI function calling 兼容 Schema；`_MCP_TOOL_HANDLERS` 通过 `@_register_handler` 装饰器注册处理器，声明是否需要 `db` 和 `user_id` 依赖。
+- **调用入口**：
+  - `MCPService.list_tools()` → 返回所有工具的 Schema 列表，供 LLM 使用
+  - `MCPService.call_tool(name, arguments, db, user_id)` → 统一调度入口，自动注入依赖
+- **设计价值**：工具与 LLM 服务解耦，新增工具只需在 mcp_service.py 中注册 Schema + Handler，无需修改 llm_service.py。
+
+### 4.6 RAG 知识库模块 (`app/services/rag_service.py`)
 
 - **核心职责**：实现文档的检索增强生成能力
 - **完整处理链路**：
@@ -278,7 +304,7 @@ fastapi_starter/
   3. 可选 BGE-Reranker 交叉编码器精排（返回 Top K）
 - **多轮会话**：通过 `load_session_history()` / `save_session_history()` 基于 Redis 管理上下文（最多 20 轮，1 小时 TTL）
 
-### 4.6 异步任务模块 (`app/worker/`)
+### 4.7 异步任务模块 (`app/worker/`)
 
 | 组件 | 说明 |
 |------|------|
@@ -286,7 +312,7 @@ fastapi_starter/
 | `tasks.py` | `process_document_task()` — 文档切分、Embedding 和入库（支持状态回传 PROGRESS） |
 | Flower | Celery 监控面板（端口 5555） |
 
-### 4.7 鉴权与安全模块
+### 4.8 鉴权与安全模块
 
 | 层次 | 组件 | 说明 |
 |------|------|------|
@@ -296,7 +322,7 @@ fastapi_starter/
 | 限流 | `rate_limit.py` | Redis ZSET 滑动窗口，60 秒/20 次（可配置） |
 | 数据隔离 | owner_id 过滤 | 任务、文档均按 `owner_id` 隔离 |
 
-### 4.8 可观测性模块
+### 4.9 可观测性模块
 
 | 维度 | 实现 | 说明 |
 |------|------|------|
@@ -307,7 +333,7 @@ fastapi_starter/
 | 统计维度 | `get_llm_overview_stats()` | 按天/按端点/按用户统计调用次数、Token、成本、平均延迟 |
 | 健康检查 | `/api/v1/health` | 返回 DB/Redis/Ollama 依赖状态，核心依赖异常时返回 503 |
 
-### 4.9 中间件模块 (`app/api/middleware.py`)
+### 4.10 中间件模块 (`app/api/middleware.py`)
 
 | 中间件 | 职责 |
 |--------|------|
@@ -619,6 +645,7 @@ docker compose exec -T ollama ollama pull bge-m3
 | Swagger API 文档 | http://localhost:8000/docs | 深色模式适配，支持 OAuth2 自动获取 Token |
 | FastAPI Metrics | http://localhost:8000/metrics | Prometheus 指标端点 |
 | 前端 Demo 页面 | http://localhost:8000/demo.html | 集成登录/RAG/聊天/任务管理 |
+| 前端 SPA（开发）| http://localhost:5173 | React 开发服务器（需 `cd frontend && npm run dev`） |
 | Prometheus | http://localhost:9090 | 指标查询 |
 | Grafana | http://localhost:3000 | 监控看板（admin / admin） |
 | Flower | http://localhost:5555 | Celery 任务监控 |
