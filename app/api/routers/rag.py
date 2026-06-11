@@ -187,9 +187,9 @@ async def query_knowledge_base(
                 + [{"role": "user", "content": request.query}]
             )
 
-        llm_client = get_llm_client()
-        response = await llm_client.chat.completions.create(
-            model=settings.LLM_MODEL_NAME,
+        llm_info = get_llm_client(current_user)
+        response = await llm_info.client.chat.completions.create(
+            model=llm_info.model_name,
             messages=messages,
             temperature=0.1,  # 降低 temperature 以保证 RAG 问答的稳定性
         )
@@ -279,7 +279,7 @@ async def query_knowledge_base_stream(
     source_chunk_contents = [c.content for c in chunks]
 
     async def _stream():
-        llm_client = get_llm_client()
+        llm_info = get_llm_client(current_user)
         full_response = ""
 
         stream_messages = [
@@ -297,8 +297,8 @@ async def query_knowledge_base_stream(
             )
 
         try:
-            response = await llm_client.chat.completions.create(
-                model=settings.LLM_MODEL_NAME,
+            response = await llm_info.client.chat.completions.create(
+                model=llm_info.model_name,
                 messages=stream_messages,
                 temperature=0.1,
                 stream=True,

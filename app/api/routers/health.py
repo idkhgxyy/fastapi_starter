@@ -31,7 +31,7 @@ async def _check_redis() -> dict:
 
 
 async def _check_ollama() -> dict:
-    base_url = settings.LLM_BASE_URL.rstrip("/v1").rstrip("/")
+    base_url = settings.OLLAMA_BASE_URL.rstrip("/v1").rstrip("/")
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{base_url}/api/tags")

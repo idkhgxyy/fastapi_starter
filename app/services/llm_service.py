@@ -2,6 +2,7 @@ import asyncio
 import ast
 import json
 import operator
+from dataclasses import dataclass
 from typing import Optional, Union
 
 import psutil
@@ -32,6 +33,12 @@ from app.utils.encryption import decrypt_api_key
 
 # 全局复用一个 AsyncOpenAI 客户端 (针对未配置自有 Key 的情况)
 _global_client = None
+
+
+@dataclass
+class LLMClientInfo:
+    client: Union[AsyncOpenAI, "MockLLMClient"]
+    model_name: str
 
 
 # ==========================================
@@ -99,19 +106,17 @@ class MockLLMClient:
     api_key = "mock"
 
 
-def get_llm_client(user: User = None) -> tuple[Union[AsyncOpenAI, MockLLMClient], str]:
+def get_llm_client(user: User = None) -> LLMClientInfo:
     """
     动态获取 LLM 客户端和模型名称。
     优先使用用户自定义的配置（支持多租户独立 Key），若用户未配置，则回退到系统全局配置。
     当 LLM_MOCK=true 时，返回 MockLLMClient，无需任何 API Key。
-    返回 (client, model_name)
     """
     if settings.LLM_MOCK:
         logger.info("==> LLM Mock 模式已开启，使用模拟客户端")
-        return MockLLMClient(), "mock-model"
+        return LLMClientInfo(client=MockLLMClient(), model_name="mock-model")
 
     if user and user.has_custom_llm_key:
-        # 用户有自定义配置，使用用户的
         api_key = decrypt_api_key(user.llm_api_key_encrypted)
         base_url = user.llm_base_url or settings.LLM_BASE_URL
         model_name = user.llm_model_name or settings.LLM_MODEL_NAME
@@ -120,16 +125,15 @@ def get_llm_client(user: User = None) -> tuple[Union[AsyncOpenAI, MockLLMClient]
             api_key=api_key,
             base_url=base_url,
         )
-        return client, model_name
+        return LLMClientInfo(client=client, model_name=model_name)
     else:
-        # 使用全局配置
         global _global_client
         if _global_client is None:
             _global_client = AsyncOpenAI(
                 api_key=settings.LLM_API_KEY,
                 base_url=settings.LLM_BASE_URL,
             )
-        return _global_client, settings.LLM_MODEL_NAME
+        return LLMClientInfo(client=_global_client, model_name=settings.LLM_MODEL_NAME)
 
 
 # ==========================================
@@ -282,10 +286,9 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
     """
     user = db.get(User, current_user_id) if db and current_user_id else None
 
-    # 动态获取客户端和模型名称
-    llm_client, model_name = get_llm_client(user)
+    info = get_llm_client(user)
 
-    if not llm_client.api_key:
+    if not info.client.api_key:
         return "【系统提示】大模型 API Key 尚未配置，请在系统或个人设置中配置。"
 
     started_at = start_timer()
@@ -317,8 +320,8 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
         messages[0]["content"] = system_prompt
 
         response = await _llm_completion_with_retry(
-            llm_client,
-            model=model_name,
+            info.client,
+            model=info.model_name,
             messages=messages,
             tools=MCPService.list_tools(),
             tool_choice="auto",
@@ -382,8 +385,8 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
             # 第二轮调用
             logger.info("==> [Round 2] 工具结果已返回，正在请求大模型生成最终回答...")
             second_response = await _llm_completion_with_retry(
-                llm_client,
-                model=model_name,
+                info.client,
+                model=info.model_name,
                 messages=messages,
                 temperature=0.7,
                 max_tokens=1000,
@@ -454,9 +457,9 @@ async def generate_chat_reply_stream(message: str, db: Session = None, current_u
     这里为了演示，提供最基础的流式输出支持。
     """
     user = db.get(User, current_user_id) if db and current_user_id else None
-    llm_client, model_name = get_llm_client(user)
+    info = get_llm_client(user)
 
-    if not llm_client.api_key:
+    if not info.client.api_key:
         yield 'data: {"error": "API Key 未配置"}\n\n'
         return
 
@@ -466,8 +469,8 @@ async def generate_chat_reply_stream(message: str, db: Session = None, current_u
     ]
 
     try:
-        response = await llm_client.chat.completions.create(
-            model=model_name, messages=messages, temperature=0.7, stream=True
+        response = await info.client.chat.completions.create(
+            model=info.model_name, messages=messages, temperature=0.7, stream=True
         )
 
         async for chunk in response:

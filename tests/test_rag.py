@@ -77,7 +77,7 @@ def test_query_knowledge_base_uses_current_user_scope(client, monkeypatch, db_se
         assert top_k == 2
         return [SimpleNamespace(content="只属于当前用户的知识片段")]
 
-    def fake_get_llm_client():
+    def fake_get_llm_client(user=None):
         class DummyClient:
             class chat:
                 class completions:
@@ -94,7 +94,7 @@ def test_query_knowledge_base_uses_current_user_scope(client, monkeypatch, db_se
                             ),
                         )
 
-        return DummyClient()
+        return SimpleNamespace(client=DummyClient(), model_name="test-model")
 
     monkeypatch.setattr(RAGService, "retrieve_relevant_chunks", fake_retrieve)
     monkeypatch.setattr("app.api.routers.rag.get_llm_client", fake_get_llm_client)
@@ -304,17 +304,20 @@ def test_rag_query_stream_returns_sse(client, monkeypatch):
     monkeypatch.setattr(RAGService, "retrieve_relevant_chunks", fake_retrieve)
     monkeypatch.setattr(
         "app.api.routers.rag.get_llm_client",
-        lambda: type(
-            "C",
-            (),
-            {
-                "chat": type(
-                    "Ch",
-                    (),
-                    {"completions": type("Co", (), {"create": staticmethod(fake_stream_create)})()},
-                )()
-            },
-        )(),
+        lambda user=None: SimpleNamespace(
+            client=type(
+                "C",
+                (),
+                {
+                    "chat": type(
+                        "Ch",
+                        (),
+                        {"completions": type("Co", (), {"create": staticmethod(fake_stream_create)})()},
+                    )()
+                },
+            )(),
+            model_name="test-model",
+        ),
     )
 
     with client.stream(

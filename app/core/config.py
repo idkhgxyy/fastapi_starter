@@ -26,17 +26,24 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
-    # LLM 配置 (默认提供 DeepSeek-V4-Pro 的占位符，可通过 .env 覆盖)
+    # LLM 配置 (默认提供 DeepSeek 的占位符，可通过 .env 覆盖)
     LLM_API_KEY: str = ""
     LLM_BASE_URL: str = "https://api.deepseek.com/v1"
-    LLM_MODEL_NAME: str = "deepseek-v4-pro"
-    EMBEDDING_MODEL_NAME: str = "bge-m3"  # RAG Embedding 依然保持本地
+    LLM_MODEL_NAME: str = "deepseek-chat"
     LLM_PROVIDER: str = "deepseek"
     LLM_INPUT_PRICE_PER_1K_TOKENS: float = 0.0
     LLM_OUTPUT_PRICE_PER_1K_TOKENS: float = 0.0
 
     # Mock 模式 — 开启后 LLM 调用返回预设回复，无需 API Key
     LLM_MOCK: bool = False
+
+    # Embedding 配置（独立于 LLM，默认指向本地 Ollama）
+    EMBEDDING_BASE_URL: str = "http://localhost:11434/v1"
+    EMBEDDING_API_KEY: str = "ollama"
+    EMBEDDING_MODEL_NAME: str = "bge-m3"
+
+    # Ollama 服务地址（用于健康检查等）
+    OLLAMA_BASE_URL: str = "http://localhost:11434/v1"
 
     # RAG 配置
     EMBEDDING_DIMENSION: int = 1024

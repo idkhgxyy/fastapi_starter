@@ -13,6 +13,8 @@ services:
       # 在 Docker Compose 网络里，API 连接数据库的地址不再是 localhost，而是 postgres 服务的名字（db）
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/fastapi_db
       - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_BASE_URL=http://ollama:11434/v1
+      - EMBEDDING_BASE_URL=http://ollama:11434/v1
     # 让代码挂载到容器中（方便开发时热重载，如果是纯生产部署可去掉 volumes）
     volumes:
       - .:/app
@@ -75,6 +77,8 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/fastapi_db
       - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_BASE_URL=http://ollama:11434/v1
+      - EMBEDDING_BASE_URL=http://ollama:11434/v1
     depends_on:
       redis:
         condition: service_healthy

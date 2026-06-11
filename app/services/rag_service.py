@@ -27,14 +27,17 @@ except ImportError:
     CrossEncoder = None
     _reranker = None
 
-_openai_client = None
+_embedding_client = None
 
 
-def _get_openai_client() -> AsyncOpenAI:
-    global _openai_client
-    if _openai_client is None:
-        _openai_client = AsyncOpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
-    return _openai_client
+def _get_embedding_client() -> AsyncOpenAI:
+    global _embedding_client
+    if _embedding_client is None:
+        _embedding_client = AsyncOpenAI(
+            api_key=settings.EMBEDDING_API_KEY,
+            base_url=settings.EMBEDDING_BASE_URL,
+        )
+    return _embedding_client
 
 
 def get_reranker():
@@ -165,7 +168,7 @@ class RAGService:
         try:
             # 去除多余的空格，减少无意义 token
             texts = [text.replace("\n", " ") for text in texts]
-            response = await _get_openai_client().embeddings.create(
+            response = await _get_embedding_client().embeddings.create(
                 input=texts, model=settings.EMBEDDING_MODEL_NAME
             )
             return [data.embedding for data in response.data]
