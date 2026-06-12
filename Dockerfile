@@ -1,3 +1,6 @@
+# 默认使用华为云 SWR 代理镜像（国内加速），CI 环境可通过 BASE_IMAGE 构建参数切换
+ARG BASE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.9-slim
+
 # ============================================
 # Stage 1: 构建前端
 # ============================================
@@ -12,8 +15,6 @@ RUN npm run build
 # ============================================
 # Stage 2: 构建后端 + 前端产物
 # ============================================
-# 默认使用华为云 SWR 代理镜像（国内加速），CI 环境可通过 BASE_IMAGE 构建参数切换
-ARG BASE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.9-slim
 FROM ${BASE_IMAGE}
 
 # 设置环境变量
