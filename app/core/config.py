@@ -1,3 +1,4 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -47,6 +48,19 @@ class Settings(BaseSettings):
 
     # RAG 配置
     EMBEDDING_DIMENSION: int = 1024
+
+    @model_validator(mode="after")
+    def _auto_enable_mock(self) -> "Settings":
+        """LLM_API_KEY 为空时自动启用 Mock 模式，实现开箱即用"""
+        if not self.LLM_API_KEY and not self.LLM_MOCK:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "LLM_API_KEY 未设置，已自动启用 Mock 模式。"
+                "设置 LLM_API_KEY 或 LLM_MOCK=false 可关闭。"
+            )
+            self.LLM_MOCK = True
+        return self
 
     model_config = SettingsConfigDict(
         env_file=".env",

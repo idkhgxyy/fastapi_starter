@@ -1,4 +1,9 @@
 services:
+  # ============================
+  # 核心服务（默认启动）
+  # docker compose up -d
+  # ============================
+
   # 后端 API 服务
   api:
     platform: linux/amd64
@@ -6,16 +11,13 @@ services:
     container_name: fastapi-starter-api
     ports:
       - "8000:8000"
-    # 我们不把 .env 直接打进镜像，而是在运行时挂载，更安全灵活
     env_file:
       - .env
     environment:
-      # 在 Docker Compose 网络里，API 连接数据库的地址不再是 localhost，而是 postgres 服务的名字（db）
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/fastapi_db
       - REDIS_URL=redis://redis:6379/0
       - OLLAMA_BASE_URL=http://ollama:11434/v1
       - EMBEDDING_BASE_URL=http://ollama:11434/v1
-    # 让代码挂载到容器中（方便开发时热重载，如果是纯生产部署可去掉 volumes）
     volumes:
       - .:/app
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
@@ -42,7 +44,6 @@ services:
       - POSTGRES_DB=fastapi_db
     ports:
       - "5432:5432"
-    # 把数据库文件持久化存到宿主机，防止容器销毁后数据丢失
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -87,10 +88,20 @@ services:
       api:
         condition: service_healthy
 
+  # ============================
+  # 可选服务 — 需显式启用 profile
+  # docker compose --profile full up -d        → 加上 Ollama
+  # docker compose --profile monitor up -d     → 加上监控
+  # docker compose --profile full --profile monitor up -d → 全部
+  # ============================
+
+  # Celery 任务监控面板
   flower:
     platform: linux/amd64
     build: .
     container_name: fastapi-starter-flower
+    profiles:
+      - monitor
     command: celery -A app.worker.celery_app flower --port=5555
     volumes:
       - .:/app
@@ -106,6 +117,8 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: fastapi-starter-ollama
+    profiles:
+      - full
     restart: always
     ports:
       - "11434:11434"
@@ -122,6 +135,8 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: fastapi-starter-prometheus
+    profiles:
+      - monitor
     restart: always
     ports:
       - "9090:9090"
@@ -135,6 +150,8 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: fastapi-starter-grafana
+    profiles:
+      - monitor
     restart: always
     ports:
       - "3000:3000"
