@@ -208,8 +208,18 @@ make seed
 # Pull from GitHub Container Registry
 docker pull ghcr.io/idkhgxyy/fastapi_starter:main
 
-# Run with Docker Compose (edit docker-compose.yml to use the pre-built image)
+# Run with external PostgreSQL and Redis
+docker run -d -p 8000:8000 \
+  -e DATABASE_URL=postgresql+psycopg://postgres:postgres@host.docker.internal:5432/fastapi_db \
+  -e REDIS_URL=redis://host.docker.internal:6379/0 \
+  -e LLM_API_KEY=your-key-here \
+  ghcr.io/idkhgxyy/fastapi_starter:main
+
+# Or use Docker Compose (recommended)
+docker compose up -d
 ```
+
+The pre-built image includes both backend and frontend — just open `http://localhost:8000` and you're ready.
 
 ## Access URLs
 

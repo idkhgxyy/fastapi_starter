@@ -1,3 +1,17 @@
+# ============================================
+# Stage 1: 构建前端
+# ============================================
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci --prefer-offline 2>/dev/null || npm install
+COPY frontend/ .
+RUN npm run build
+
+# ============================================
+# Stage 2: 构建后端 + 前端产物
+# ============================================
 # 默认使用华为云 SWR 代理镜像（国内加速），CI 环境可通过 BASE_IMAGE 构建参数切换
 ARG BASE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.9-slim
 FROM ${BASE_IMAGE}
@@ -22,11 +36,17 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
-# 复制整个项目代码到容器中
-COPY . .
+# 复制后端代码
+COPY app/ app/
+COPY alembic/ alembic/
+COPY alembic.ini .
+COPY scripts/ scripts/
+
+# 从前端构建阶段复制产物到静态文件目录
+COPY --from=frontend-builder /frontend/dist app/static/
 
 # 暴露 FastAPI 运行端口
 EXPOSE 8000
 
-# 启动命令（默认用 uvicorn，生产环境通常推荐 gunicorn 配合 uvicorn worker，这里为了保持 starter 简单先用 uvicorn）
+# 启动命令
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

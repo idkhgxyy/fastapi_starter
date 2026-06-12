@@ -215,9 +215,15 @@ async def root():
     }
 
 
-# 挂载静态文件目录 (用于前端 Demo)
+# 挂载前端静态文件目录
+# 优先使用 app/static/（Docker 镜像构建产物），其次使用 frontend/dist/（开发模式）
 import os
 
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-if os.path.exists(static_dir):
-    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+_static_candidates = [
+    os.path.join(os.path.dirname(__file__), "static"),  # Docker 镜像: app/static/
+    os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"),  # 开发模式: frontend/dist/
+]
+for _dir in _static_candidates:
+    if os.path.exists(_dir) and os.listdir(_dir):
+        app.mount("/", StaticFiles(directory=_dir, html=True), name="static")
+        break
