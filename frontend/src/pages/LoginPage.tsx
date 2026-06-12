@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { login, getCurrentUser } from '@/services/authService'
+import api from '@/services/api'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -12,6 +13,14 @@ export default function LoginPage() {
   const [showTokenLogin, setShowTokenLogin] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    api.get('/auth/setup/status').then((r) => {
+      if (!r.data.initialized) {
+        navigate('/setup', { replace: true })
+      }
+    }).catch(() => {})
+  }, [navigate])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()

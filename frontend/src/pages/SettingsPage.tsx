@@ -2,6 +2,8 @@ import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { getCurrentUser, updateLLMConfig, changePassword } from '@/services/userService'
+import type { HealthStatus } from '@/types'
+import api from '@/services/api'
 
 const PROVIDERS = [
   { value: '', label: '使用全局配置' },
@@ -28,8 +30,11 @@ export default function SettingsPage() {
   const [pwSaving, setPwSaving] = useState(false)
   const [pwMessage, setPwMessage] = useState('')
 
+  const [health, setHealth] = useState<HealthStatus | null>(null)
+
   useEffect(() => {
     getCurrentUser().then((u) => setUser(u)).catch(() => {})
+    api.get<HealthStatus>('/health').then((r) => setHealth(r.data)).catch(() => {})
   }, [setUser])
 
   async function handleLLMConfig(e: FormEvent) {
@@ -88,6 +93,22 @@ export default function SettingsPage() {
       </header>
 
       <div className="max-w-xl mx-auto p-6 space-y-8">
+        <section>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">系统状态</h2>
+          <div className="grid grid-cols-3 gap-3">
+            <StatusCard label="Database" status={health?.dependencies.database.status} />
+            <StatusCard label="Redis" status={health?.dependencies.redis.status} />
+            <StatusCard label="Ollama" status={health?.dependencies.ollama.status} />
+          </div>
+          {health?.dependencies.ollama.status !== 'up' && (
+            <p className="mt-2 text-xs text-[var(--text-tertiary)]">
+              Ollama 未运行 — RAG 文档向量化不可用。运行 <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] font-mono">make up-full</code> 启动完整服务。
+            </p>
+          )}
+        </section>
+
+        <hr className="border-[var(--border-primary)]" />
+
         <section>
           <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1">LLM 配置</h2>
           <p className="text-xs text-[var(--text-tertiary)] mb-4">
@@ -205,6 +226,19 @@ export default function SettingsPage() {
           </form>
         </section>
       </div>
+    </div>
+  )
+}
+
+function StatusCard({ label, status }: { label: string; status?: string }) {
+  const isUp = status === 'up'
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)]">
+      <span className={`w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-400'}`} />
+      <span className="text-sm text-[var(--text-secondary)]">{label}</span>
+      <span className={`text-xs ml-auto ${isUp ? 'text-emerald-500' : 'text-red-400'}`}>
+        {isUp ? 'UP' : 'DOWN'}
+      </span>
     </div>
   )
 }

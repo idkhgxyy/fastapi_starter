@@ -5,6 +5,7 @@ import { ProtectedRoute, PublicRoute } from '@/components/auth/ProtectedRoute'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import LoginPage from '@/pages/LoginPage'
 import RegisterPage from '@/pages/RegisterPage'
+import SetupPage from '@/pages/SetupPage'
 import ChatPage from '@/pages/ChatPage'
 import KnowledgePage from '@/pages/KnowledgePage'
 import TasksPage from '@/pages/TasksPage'
@@ -20,6 +21,7 @@ function App() {
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Navigate to="/chat" replace />} />
+              <Route path="/setup" element={<SetupPage />} />
               <Route
                 path="/auth/login"
                 element={

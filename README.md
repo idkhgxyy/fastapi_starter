@@ -19,8 +19,11 @@ A production-grade full-stack AI Agent system built with **FastAPI + React + Pos
 - `Redis sliding-window rate limiting` on chat endpoints, graceful degradation on Redis failure
 - `SSE streaming` for both Chat and RAG queries
 - `Multi-turn conversation` — RAG supports session-based context via `session_id`
-- `GitHub Actions CI` with PostgreSQL integration tests + Docker build verification
-- `121 unit tests` + pre-commit hooks (ruff lint/format)
+- `GitHub Actions CI` PostgreSQL integration tests + Docker build verification
+- `129 unit tests` + pre-commit hooks (ruff lint/format)
+- **Auto Mock mode** — no API Key? No problem. System auto-enables Mock mode when `LLM_API_KEY` is empty
+- **`make setup` one-click start** — auto-generates SECRET_KEY, seeds demo data, pulls Ollama models
+- **Docker Compose Profiles** — core 4 containers by default, `--profile full` adds Ollama, `--profile monitor` adds Grafana/Prometheus
 - **Modern React SPA frontend** — 8 route pages covering chat, knowledge base, tasks, observability, settings, health
 - **SSE streaming rendering** — typewriter-effect real-time chat display
 - **Mock mode** — full offline development without a running backend
@@ -145,30 +148,59 @@ scripts/        # Bootstrap & eval scripts
 ### Option 1: One-click (recommended)
 
 ```bash
-bash scripts/bootstrap_local.sh
+make setup
 ```
 
 This script automatically:
-- Copies `.env.example` to `.env`
-- Starts API / PostgreSQL / Redis / Celery / Ollama / Prometheus / Grafana / Flower
-- Pulls `qwen2.5:3b` and `bge-m3` models
+- Copies `.env.example` to `.env` and generates a random `SECRET_KEY`
+- Starts core services (API + PostgreSQL + Redis + Celery Worker)
+- Waits for API to be healthy, then seeds demo data
+- Checks Ollama availability and pulls `bge-m3` if running
+- **No API Key required** — Mock mode auto-enables when `LLM_API_KEY` is empty
 
 ### Option 2: Manual
 
 ```bash
 cp .env.example .env
+# Edit .env: set LLM_API_KEY or leave empty for Mock mode
 docker compose up -d --build
-docker compose exec -T ollama ollama pull qwen2.5:3b
-docker compose exec -T ollama ollama pull bge-m3
 ```
 
-### Seed demo data (optional)
+### Start optional services
 
 ```bash
-docker compose exec api python scripts/seed_demo_data.py
+# Add Ollama for RAG (document vectorization)
+docker compose --profile full up -d
+
+# Add monitoring (Prometheus + Grafana + Flower)
+docker compose --profile monitor up -d
+
+# Full stack (all services)
+docker compose --profile full --profile monitor up -d
 ```
 
-Creates a demo user (`demo@example.com` / `demo123456`) with sample data.
+### Makefile commands
+
+```bash
+make help          # Show all commands
+make setup         # First-time setup (init .env + start + seed)
+make up            # Start core services
+make up-full       # Start with Ollama + monitoring
+make down          # Stop all services
+make logs          # View API logs
+make seed          # Seed demo data
+make test          # Run pytest
+make ollama-pull   # Pull Ollama models
+make shell         # Enter API container shell
+make clean         # Remove containers + volumes
+```
+
+### Demo account
+
+```bash
+make seed
+# Email: demo@example.com  Password: demo123456
+```
 
 ## Access URLs
 
@@ -301,7 +333,7 @@ Each LLM invocation records:
 ## Testing
 
 ```bash
-# Run all 121 unit tests
+# Run all 129 unit tests
 python3 -m pytest -q
 
 # With coverage report

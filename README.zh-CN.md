@@ -20,7 +20,10 @@
 - `SSE 流式输出` Chat 和 RAG 均支持 Server-Sent Events 流式响应
 - `多轮对话记忆` RAG 支持 session_id 管理对话上下文
 - `GitHub Actions CI` PostgreSQL 集成测试 + Docker 构建验证
-- `121 个单元测试` + pre-commit hooks（ruff lint/format）
+- `129 个单元测试` + pre-commit hooks（ruff lint/format）
+- **Mock 模式自动启用** — 无需 API Key，`LLM_API_KEY` 为空时自动切换 Mock 模式
+- **`make setup` 一键启动** — 自动生成 SECRET_KEY、灌入 demo 数据、拉取 Ollama 模型
+- **Docker Compose Profile 分层** — 核心 4 容器默认启动，`--profile full` 加 Ollama，`--profile monitor` 加监控
 - **现代化 React SPA 前端** — 8 个独立路由页面，覆盖聊天、知识库、任务、可观测性、设置、健康监控
 - **SSE 流式渲染** — 支持打字机效果的流式对话展示
 - **全 Mock 模式** — 无需后端即可独立开发调试
@@ -145,32 +148,59 @@ scripts/        # 初始化脚本、评测脚本
 ### 方式一：推荐
 
 ```bash
-bash scripts/bootstrap_local.sh
+make setup
 ```
 
 这个脚本会自动完成：
-- 复制 `.env.example` 为 `.env`
-- 启动 `API / PostgreSQL / Redis / Celery Worker / Ollama / Prometheus / Grafana / Flower`
-- 拉取 `qwen2.5:3b` 与 `bge-m3`
-
-> 当前 Dockerfile 默认使用可稳定访问的镜像代理源，`api` 与 `celery_worker` 显式指定为 `linux/amd64`，在 Apple Silicon 机器上也能稳定运行。
+- 复制 `.env.example` 为 `.env`，并自动生成随机 `SECRET_KEY`
+- 启动核心服务（API + PostgreSQL + Redis + Celery Worker）
+- 等待 API 就绪后自动灌入 demo 数据
+- 检测 Ollama 可用性，如运行则拉取 `bge-m3` 模型
+- **无需 API Key** — `LLM_API_KEY` 为空时自动启用 Mock 模式
 
 ### 方式二：手动启动
 
 ```bash
 cp .env.example .env
+# 编辑 .env：设置 LLM_API_KEY，或留空使用 Mock 模式
 docker compose up -d --build
-docker compose exec -T ollama ollama pull qwen2.5:3b
-docker compose exec -T ollama ollama pull bge-m3
 ```
 
-### 初始化种子数据（可选）
+### 启动可选服务
 
 ```bash
-docker compose exec api python scripts/seed_demo_data.py
+# 加上 Ollama（RAG 文档向量化需要）
+docker compose --profile full up -d
+
+# 加上监控（Prometheus + Grafana + Flower）
+docker compose --profile monitor up -d
+
+# 完整全栈（所有服务）
+docker compose --profile full --profile monitor up -d
 ```
 
-创建 demo 用户（`demo@example.com` / `demo123456`）和示例数据。
+### Makefile 常用命令
+
+```bash
+make help          # 查看所有命令
+make setup         # 首次安装（初始化 .env + 启动 + 灌数据）
+make up            # 启动核心服务
+make up-full       # 启动全部服务（含 Ollama + 监控）
+make down          # 停止所有服务
+make logs          # 查看 API 日志
+make seed          # 灌入 demo 数据
+make test          # 运行 pytest
+make ollama-pull   # 拉取 Ollama 模型
+make shell         # 进入 API 容器
+make clean         # 清理容器和数据卷
+```
+
+### Demo 账号
+
+```bash
+make seed
+# 邮箱: demo@example.com  密码: demo123456
+```
 
 ## 常用访问地址
 
@@ -303,7 +333,7 @@ curl "http://localhost:8000/api/v1/observability/llm-stats?days=7" \
 ## 测试与验证
 
 ```bash
-# 运行全部 121 个单元测试
+# 运行全部 129 个单元测试
 python3 -m pytest -q
 
 # 带覆盖率报告

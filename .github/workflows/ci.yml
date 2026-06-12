@@ -58,6 +58,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      - name: Lint with ruff
+        run: |
+          ruff check app/ tests/
+          ruff format --check app/ tests/
+
       - name: Run tests with coverage
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_db
