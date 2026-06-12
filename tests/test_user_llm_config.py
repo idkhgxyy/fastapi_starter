@@ -1,5 +1,3 @@
-
-
 def test_user_llm_config(client):
     # 1. Create a user
     client.post(

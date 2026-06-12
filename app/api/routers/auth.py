@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.core.config import settings
-from app.core.security import create_access_token, get_password_hash
+from app.core.security import create_access_token
 from app.models.user import User
 from app.schemas.auth import SetupRequest, SetupStatus, Token
 from app.services.auth_service import AuthService
@@ -43,24 +43,33 @@ async def initial_setup(
             code=1010, msg="System already initialized", status_code=status.HTTP_400_BAD_REQUEST
         )
 
-    user_in = type("UserCreate", (), {
-        "username": setup_in.username,
-        "email": setup_in.email,
-        "password": setup_in.password,
-        "full_name": setup_in.full_name or setup_in.username,
-    })()
+    user_in = type(
+        "UserCreate",
+        (),
+        {
+            "username": setup_in.username,
+            "email": setup_in.email,
+            "password": setup_in.password,
+            "full_name": setup_in.full_name or setup_in.username,
+        },
+    )()
 
     user = UserService.create_user(db, user_in)
 
     # 如果提供了 LLM API Key，同时配置
     if setup_in.llm_api_key:
         from app.schemas.user import UserLLMConfigUpdate
-        UserService.update_llm_config(db, user.id, UserLLMConfigUpdate(
-            llm_provider=setup_in.llm_provider or settings.LLM_PROVIDER,
-            llm_base_url=setup_in.llm_base_url or settings.LLM_BASE_URL,
-            llm_model_name=setup_in.llm_model_name or settings.LLM_MODEL_NAME,
-            llm_api_key=setup_in.llm_api_key,
-        ))
+
+        UserService.update_llm_config(
+            db,
+            user.id,
+            UserLLMConfigUpdate(
+                llm_provider=setup_in.llm_provider or settings.LLM_PROVIDER,
+                llm_base_url=setup_in.llm_base_url or settings.LLM_BASE_URL,
+                llm_model_name=setup_in.llm_model_name or settings.LLM_MODEL_NAME,
+                llm_api_key=setup_in.llm_api_key,
+            ),
+        )
 
     access_token = create_access_token(
         data={"sub": str(user.id)},

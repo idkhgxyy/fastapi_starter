@@ -19,7 +19,9 @@ def process_document_task(self, document_id: int):
     对已上传文档执行真实的切分、Embedding 和入库流程。
     遇到临时故障（如 Ollama 未就绪）会自动重试最多 3 次，指数退避。
     """
-    logger.info(f"==> 开始异步处理文档，文档 ID: {document_id} (attempt {self.request.retries + 1})")
+    logger.info(
+        f"==> 开始异步处理文档，文档 ID: {document_id} (attempt {self.request.retries + 1})"
+    )
     db = SessionLocal()
     rag_service = RAGService(db)
 

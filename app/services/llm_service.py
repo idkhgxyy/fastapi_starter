@@ -1,13 +1,12 @@
-import asyncio
 import ast
+import asyncio
 import json
 import operator
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Union
 
 import psutil
-from openai import AsyncOpenAI
-from openai import APIConnectionError, APIError, APITimeoutError, RateLimitError
+from openai import APIConnectionError, APITimeoutError, AsyncOpenAI, RateLimitError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tenacity import (
@@ -86,7 +85,9 @@ class _MockChatCompletions:
         stream = kwargs.get("stream", False)
         if stream:
             return self._stream_response()
-        return _MockResponse(content="这是 Mock 模式的回复。系统正以离线演示模式运行，未连接真实 LLM API。你可以继续体验对话流程，但所有回复均为预设内容。")
+        return _MockResponse(
+            content="这是 Mock 模式的回复。系统正以离线演示模式运行，未连接真实 LLM API。你可以继续体验对话流程，但所有回复均为预设内容。"
+        )
 
     async def _stream_response(self):
         content = "这是 Mock 模式下的流式回复，用于演示目的。系统当前运行在 Mock 模式，未连接真实 LLM API。"
@@ -102,6 +103,7 @@ class _MockChat:
 
 class MockLLMClient:
     """模拟 LLM 客户端，返回预设回复，无需 API Key"""
+
     chat = _MockChat()
     api_key = "mock"
 

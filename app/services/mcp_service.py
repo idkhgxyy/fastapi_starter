@@ -4,12 +4,12 @@ MCP (Model Context Protocol) 适配层
 将系统内部工具封装为标准 MCP Tool 接口，支持统一的注册、发现与调用。
 遵循 Model Context Protocol 规范，工具定义兼容 OpenAI function calling 格式。
 """
+
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
 from app.core.logging import logger
-
 
 # ==========================================
 # 工具 Schema 定义（集中注册）
@@ -106,10 +106,9 @@ _MCP_TOOL_DEFINITIONS = [
 _MCP_TOOL_HANDLERS: dict[str, dict[str, Any]] = {}
 
 
-def _register_handler(
-    name: str, requires_db: bool = False, requires_user: bool = False
-):
+def _register_handler(name: str, requires_db: bool = False, requires_user: bool = False):
     """装饰器：注册一个 MCP 工具处理器"""
+
     def decorator(func):
         _MCP_TOOL_HANDLERS[name] = {
             "handler": func,
@@ -117,6 +116,7 @@ def _register_handler(
             "requires_user": requires_user,
         }
         return func
+
     return decorator
 
 
@@ -125,28 +125,30 @@ def _register_handler(
 # 使用懒加载避免与 llm_service 循环引用
 # ==========================================
 
+
 @_register_handler("get_current_weather")
 def _handle_weather(location: str) -> str:
     from app.services.llm_service import get_current_weather
+
     return get_current_weather(location=location)
 
 
 @_register_handler("get_system_status")
 def _handle_system_status() -> str:
     from app.services.llm_service import get_system_status
+
     return get_system_status()
 
 
 @_register_handler("list_tasks", requires_db=True, requires_user=True)
 def _handle_list_tasks(db: Session, user_id: int, status: Optional[str] = None) -> str:
     from app.services.llm_service import list_tasks
+
     return list_tasks(db=db, user_id=user_id, status=status)
 
 
 @_register_handler("create_task", requires_db=True, requires_user=True)
-def _handle_create_task(
-    db: Session, user_id: int, title: str, description: str = ""
-) -> str:
+def _handle_create_task(db: Session, user_id: int, title: str, description: str = "") -> str:
     from app.schemas.task import TaskCreate
     from app.services.task_service import TaskService
 
@@ -159,6 +161,7 @@ def _handle_create_task(
 @_register_handler("calculate")
 def _handle_calculate(expression: str) -> str:
     from app.services.llm_service import calculate
+
     return calculate(expression=expression)
 
 

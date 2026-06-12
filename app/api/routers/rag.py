@@ -5,7 +5,6 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, get_db
-from app.core.config import settings
 from app.schemas.rag import DocumentResponse, RAGQueryRequest, RAGQueryResponse
 from app.services.llm_observability_service import (
     create_llm_call_log,

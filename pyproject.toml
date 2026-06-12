@@ -13,7 +13,16 @@ select = [
 ]
 ignore = [
     "E501",  # line too long (handled by formatter)
+    "B008",  # function call in argument defaults (FastAPI Depends pattern)
+    "B904",  # raise from (FastAPI HTTPException pattern)
+    "N818",  # exception name should use Error suffix (AppException is intentional)
+    "B011",  # assert False (test pattern)
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"app/models/__init__.py" = ["F401"]  # Alembic needs these imports for model discovery
+"app/main.py" = ["W291", "W293", "E402"]  # CSS in Python string + late import
+"tests/**" = ["N801"]  # test class names can be lowercase
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

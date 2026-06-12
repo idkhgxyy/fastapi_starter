@@ -312,7 +312,11 @@ def test_rag_query_stream_returns_sse(client, monkeypatch):
                     "chat": type(
                         "Ch",
                         (),
-                        {"completions": type("Co", (), {"create": staticmethod(fake_stream_create)})()},
+                        {
+                            "completions": type(
+                                "Co", (), {"create": staticmethod(fake_stream_create)}
+                            )()
+                        },
                     )()
                 },
             )(),
