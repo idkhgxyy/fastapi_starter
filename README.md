@@ -202,6 +202,15 @@ make seed
 # Email: demo@example.com  Password: demo123456
 ```
 
+### Use pre-built Docker image
+
+```bash
+# Pull from GitHub Container Registry
+docker pull ghcr.io/idkhgxyy/fastapi_starter:main
+
+# Run with Docker Compose (edit docker-compose.yml to use the pre-built image)
+```
+
 ## Access URLs
 
 | Entry | URL | Notes |
