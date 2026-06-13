@@ -90,17 +90,27 @@ class UserService:
                 code=1002, msg="User not found", status_code=status.HTTP_404_NOT_FOUND
             )
 
+        update_data = {}
         if config_in.llm_provider is not None:
-            user.llm_provider = config_in.llm_provider
+            update_data["llm_provider"] = (
+                config_in.llm_provider if config_in.llm_provider.strip() else None
+            )
         if config_in.llm_base_url is not None:
-            user.llm_base_url = config_in.llm_base_url
+            update_data["llm_base_url"] = (
+                config_in.llm_base_url if config_in.llm_base_url.strip() else None
+            )
         if config_in.llm_model_name is not None:
-            user.llm_model_name = config_in.llm_model_name
+            update_data["llm_model_name"] = (
+                config_in.llm_model_name if config_in.llm_model_name.strip() else None
+            )
         if config_in.llm_api_key is not None:
             if config_in.llm_api_key.strip() == "":
-                user.llm_api_key_encrypted = None
+                update_data["llm_api_key_encrypted"] = None
             else:
-                user.llm_api_key_encrypted = encrypt_api_key(config_in.llm_api_key)
+                update_data["llm_api_key_encrypted"] = encrypt_api_key(config_in.llm_api_key)
+
+        for field, value in update_data.items():
+            setattr(user, field, value)
 
         db.commit()
         db.refresh(user)

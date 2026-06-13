@@ -1,21 +1,29 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_superuser, get_current_user, get_db
+from app.core.config import settings
 from app.models.user import User
 from app.schemas.user import PasswordUpdate, UserCreate, UserLLMConfigUpdate, UserOut
 from app.services.user_service import UserService
+from app.utils.rate_limit import RateLimiter
 
 router = APIRouter()
 
+# 注册接口限流：同一 IP 每小时最多 5 次注册（测试环境不限流）
+register_limiter = RateLimiter(times=5, seconds=3600) if not settings.TESTING else None
+
 
 @router.post("/", response_model=UserOut, status_code=status.HTTP_201_CREATED, summary="创建用户")
-async def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
+async def create_user(user_in: UserCreate, request: Request, db: Session = Depends(get_db)):
     """
-    通过 Depends(get_db) 自动获取数据库连接，并传递给 service 层
+    通过 Depends(get_db) 自动获取数据库连接，并传递给 service 层。
+    限流：同一 IP 每小时最多 5 次注册请求。
     """
+    if register_limiter:
+        await register_limiter(request)
     return UserService.create_user(db, user_in)
 
 
@@ -51,7 +59,9 @@ async def change_password(
 
 
 @router.get("/{user_id}", response_model=UserOut, summary="获取指定用户详情")
-async def get_user(user_id: int, db: Session = Depends(get_db)):
+async def get_user(
+    user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     return UserService.get_user(db, user_id)
 
 

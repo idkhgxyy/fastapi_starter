@@ -113,29 +113,33 @@ def get_llm_client(user: User = None) -> LLMClientInfo:
     动态获取 LLM 客户端和模型名称。
     优先使用用户自定义的配置（支持多租户独立 Key），若用户未配置，则回退到系统全局配置。
     当 LLM_MOCK=true 时，返回 MockLLMClient，无需任何 API Key。
+    用户自定义 Key 解密失败时，自动降级到全局配置。
     """
     if settings.LLM_MOCK:
         logger.info("==> LLM Mock 模式已开启，使用模拟客户端")
         return LLMClientInfo(client=MockLLMClient(), model_name="mock-model")
 
     if user and user.has_custom_llm_key:
-        api_key = decrypt_api_key(user.llm_api_key_encrypted)
-        base_url = user.llm_base_url or settings.LLM_BASE_URL
-        model_name = user.llm_model_name or settings.LLM_MODEL_NAME
+        try:
+            api_key = decrypt_api_key(user.llm_api_key_encrypted)
+            base_url = user.llm_base_url or settings.LLM_BASE_URL
+            model_name = user.llm_model_name or settings.LLM_MODEL_NAME
 
-        client = AsyncOpenAI(
-            api_key=api_key,
-            base_url=base_url,
-        )
-        return LLMClientInfo(client=client, model_name=model_name)
-    else:
-        global _global_client
-        if _global_client is None:
-            _global_client = AsyncOpenAI(
-                api_key=settings.LLM_API_KEY,
-                base_url=settings.LLM_BASE_URL,
+            client = AsyncOpenAI(
+                api_key=api_key,
+                base_url=base_url,
             )
-        return LLMClientInfo(client=_global_client, model_name=settings.LLM_MODEL_NAME)
+            return LLMClientInfo(client=client, model_name=model_name)
+        except Exception as e:
+            logger.warning(f"用户 {user.id} 的自定义 LLM Key 解密失败，降级到全局配置: {e}")
+
+    global _global_client
+    if _global_client is None:
+        _global_client = AsyncOpenAI(
+            api_key=settings.LLM_API_KEY,
+            base_url=settings.LLM_BASE_URL,
+        )
+    return LLMClientInfo(client=_global_client, model_name=settings.LLM_MODEL_NAME)
 
 
 # ==========================================

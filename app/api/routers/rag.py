@@ -41,6 +41,9 @@ async def upload_document(
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided.")
 
+    if len(file.filename) > 255:
+        raise HTTPException(status_code=400, detail="Filename too long (max 255 characters).")
+
     name_lower = file.filename.lower()
     if not any(name_lower.endswith(ext) for ext in SUPPORTED_EXTENSIONS):
         raise HTTPException(

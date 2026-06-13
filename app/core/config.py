@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     # 项目基础信息
     PROJECT_NAME: str = "FastAPI Starter"
     VERSION: str = "0.1.0"
+    TESTING: bool = False
 
     # 数据库配置
     DATABASE_URL: str = "postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_db"

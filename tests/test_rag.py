@@ -247,7 +247,7 @@ def test_upload_unsupported_format(client):
     )
 
     assert response.status_code == 400
-    assert "Unsupported" in response.json()["detail"]
+    assert "Unsupported" in response.json()["msg"]
 
 
 def test_upload_empty_pdf(client):
@@ -270,7 +270,7 @@ def test_upload_empty_pdf(client):
     )
 
     assert response.status_code == 400
-    assert "no extractable text" in response.json()["detail"].lower()
+    assert "no extractable text" in response.json()["msg"].lower()
 
 
 def test_rag_query_stream_returns_sse(client, monkeypatch):

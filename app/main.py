@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
@@ -15,7 +16,7 @@ from app.core.config import settings
 from app.core.logging import logger
 from app.db.base import Base
 from app.db.session import engine
-from app.utils.errors import AppException, app_exception_handler
+from app.utils.errors import AppException, app_exception_handler, http_exception_handler
 
 
 def _validate_startup_config():
@@ -115,12 +116,6 @@ async def custom_swagger_ui_html():
     html_content = get_swagger_ui_html(
         openapi_url=app.openapi_url,
         title=app.title + " - Swagger UI",
-        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
-        swagger_ui_init_oauth={
-            "clientId": "fastapi-starter",
-            "appName": "FastAPI Starter",
-            "usePkceWithAuthorizationCodeGrant": False,
-        },
     ).body.decode("utf-8")
 
     # 注入 CSS 样式，使 Swagger UI 在系统深色模式下表现良好，同时保留浅色模式
@@ -193,6 +188,7 @@ async def custom_swagger_ui_html():
 
 # 注册全局异常处理器
 app.add_exception_handler(AppException, app_exception_handler)
+app.add_exception_handler(HTTPException, http_exception_handler)
 
 # 注册所有路由
 app.include_router(health.router, prefix="/api/v1")

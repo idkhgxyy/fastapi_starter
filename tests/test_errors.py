@@ -44,7 +44,10 @@ class TestErrorResponseFormat:
         response = client.get("/api/v1/users/me")
         assert response.status_code == 401
         json_data = response.json()
-        assert "detail" in json_data
+        # HTTPException 已被全局处理器转换为统一格式
+        assert "code" in json_data
+        assert "msg" in json_data
+        assert json_data["code"] == 1008
 
     def test_duplicate_registration_returns_error_format(self, client):
         client.post(

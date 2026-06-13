@@ -58,6 +58,29 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleClearLLMConfig() {
+    setLlmMessage('')
+    setLlmSaving(true)
+    try {
+      const updated = await updateLLMConfig({
+        provider: ' ',
+        base_url: ' ',
+        model_name: ' ',
+        api_key: ' ',
+      })
+      setUser(updated)
+      setProvider('')
+      setBaseUrl('')
+      setModelName('')
+      setApiKey('')
+      setLlmMessage('个人 LLM 配置已清除，将使用全局配置')
+    } catch {
+      setLlmMessage('清除失败，请重试')
+    } finally {
+      setLlmSaving(false)
+    }
+  }
+
   async function handlePassword(e: FormEvent) {
     e.preventDefault()
     setPwMessage('')
@@ -168,9 +191,16 @@ export default function SettingsPage() {
               </p>
             )}
 
-            <button type="submit" disabled={llmSaving} className="px-4 py-2 rounded-lg bg-brand-500 text-white text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors">
-              {llmSaving ? '保存中...' : '保存配置'}
-            </button>
+            <div className="flex items-center gap-3">
+              <button type="submit" disabled={llmSaving} className="px-4 py-2 rounded-lg bg-brand-500 text-white text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors">
+                {llmSaving ? '保存中...' : '保存配置'}
+              </button>
+              {user?.has_custom_llm_key && (
+                <button type="button" disabled={llmSaving} onClick={handleClearLLMConfig} className="px-4 py-2 rounded-lg border border-[var(--border-primary)] text-[var(--text-secondary)] text-sm font-medium hover:text-[var(--color-error)] hover:border-[var(--color-error)] disabled:opacity-50 transition-colors">
+                  清除个人配置
+                </button>
+              )}
+            </div>
           </form>
         </section>
 
