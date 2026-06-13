@@ -19,7 +19,7 @@ export default function RegisterPage() {
     try {
       await register(username, email, password)
       const { access_token } = await login(email, password)
-      authLogin(access_token, { id: 0, username, email, has_custom_llm_key: false })
+      authLogin(access_token, { id: 0, username, email, full_name: null, is_active: true, is_superuser: false, has_custom_llm_key: false, llm_provider: null, llm_base_url: null, llm_model_name: null })
       const user = await getCurrentUser()
       authLogin(access_token, user)
       navigate('/chat', { replace: true })

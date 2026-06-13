@@ -11,7 +11,13 @@ const mockUser: User = {
   id: 1,
   username: 'DemoUser',
   email: 'demo@example.com',
+  full_name: 'Demo User',
+  is_active: true,
+  is_superuser: false,
   has_custom_llm_key: false,
+  llm_provider: null,
+  llm_base_url: null,
+  llm_model_name: null,
 }
 
 const mockDocuments: Document[] = [
