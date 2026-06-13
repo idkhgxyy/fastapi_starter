@@ -1,12 +1,13 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.services.rag_service import RAGService
+from app.utils.errors import AppException
 from app.worker.celery_app import celery_app
 from app.worker.tasks import process_document_task
 
@@ -38,7 +39,7 @@ async def trigger_document_processing(
         owner_id=current_user.id,
     )
     if document is None:
-        raise HTTPException(status_code=404, detail="Document not found.")
+        raise AppException(code=1001, msg="Document not found.", status_code=404)
 
     task = process_document_task.delay(request.document_id)
     document = rag_service.requeue_document(
@@ -70,7 +71,7 @@ async def get_task_status(
         owner_id=current_user.id,
     )
     if document is None:
-        raise HTTPException(status_code=404, detail="Task not found.")
+        raise AppException(code=1001, msg="Task not found.", status_code=404)
 
     task_result = celery_app.AsyncResult(task_id)
 

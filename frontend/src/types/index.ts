@@ -2,7 +2,13 @@ export interface User {
   id: number
   username: string
   email: string
+  full_name: string | null
+  is_active: boolean
+  is_superuser: boolean
   has_custom_llm_key: boolean
+  llm_provider: string | null
+  llm_base_url: string | null
+  llm_model_name: string | null
 }
 
 export interface AuthState {

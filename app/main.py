@@ -191,7 +191,7 @@ app.add_exception_handler(AppException, app_exception_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)
 
 # 注册所有路由
-app.include_router(health.router, prefix="/api/v1")
+app.include_router(health.router, prefix="/api/v1/health", tags=["Health"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["Chat"])
@@ -199,16 +199,6 @@ app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["Tasks"])
 app.include_router(worker.router, prefix="/api/v1/worker", tags=["Worker (Async)"])
 app.include_router(rag.router, prefix="/api/v1/rag", tags=["RAG"])
 app.include_router(observability.router, prefix="/api/v1/observability", tags=["Observability"])
-
-
-@app.get("/", summary="根目录重定向或欢迎信息", tags=["Root"])
-async def root():
-    logger.info("Root endpoint accessed.")
-    return {
-        "message": "Welcome to FastAPI Starter. Visit /docs for API documentation.",
-        "docs_url": "/docs",
-        "demo_url": "/demo.html",
-    }
 
 
 # 挂载前端静态文件目录
@@ -219,7 +209,19 @@ _static_candidates = [
     os.path.join(os.path.dirname(__file__), "static"),  # Docker 镜像: app/static/
     os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"),  # 开发模式: frontend/dist/
 ]
+_static_dir = None
 for _dir in _static_candidates:
     if os.path.exists(_dir) and os.listdir(_dir):
-        app.mount("/", StaticFiles(directory=_dir, html=True), name="static")
+        _static_dir = _dir
         break
+
+if _static_dir:
+    app.mount("/", StaticFiles(directory=_static_dir, html=True), name="static")
+else:
+    # 无前端构建产物时，提供 JSON 欢迎信息
+    @app.get("/", summary="根目录欢迎信息", tags=["Root"])
+    async def root():
+        return {
+            "message": "Welcome to FastAPI Starter. Visit /docs for API documentation.",
+            "docs_url": "/docs",
+        }

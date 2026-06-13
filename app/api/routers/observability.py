@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, get_db
@@ -30,11 +31,12 @@ async def list_llm_calls(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    query = db.query(LLMCallLog)
+    stmt = select(LLMCallLog)
     if not current_user.is_superuser:
-        query = query.filter(LLMCallLog.user_id == current_user.id)
+        stmt = stmt.where(LLMCallLog.user_id == current_user.id)
 
-    logs = query.order_by(LLMCallLog.created_at.desc()).offset(skip).limit(limit).all()
+    stmt = stmt.order_by(LLMCallLog.created_at.desc()).offset(skip).limit(limit)
+    logs = list(db.scalars(stmt).all())
     return [
         LLMCallLogOut(
             id=log.id,

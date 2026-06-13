@@ -38,6 +38,13 @@ export async function* streamChatMessage(message: string): AsyncGenerator<{
   })
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('agent_token')
+      localStorage.removeItem('agent_user')
+      window.location.href = '/auth/login'
+      yield { error: '登录已过期，请重新登录' }
+      return
+    }
     let errorMsg = '请求失败'
     try {
       const err = await response.json()

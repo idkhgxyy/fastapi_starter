@@ -37,6 +37,14 @@ export default function SettingsPage() {
     api.get<HealthStatus>('/health').then((r) => setHealth(r.data)).catch(() => {})
   }, [setUser])
 
+  useEffect(() => {
+    if (user) {
+      setProvider(user.llm_provider || '')
+      setBaseUrl(user.llm_base_url || '')
+      setModelName(user.llm_model_name || '')
+    }
+  }, [user])
+
   async function handleLLMConfig(e: FormEvent) {
     e.preventDefault()
     setLlmMessage('')
@@ -63,10 +71,10 @@ export default function SettingsPage() {
     setLlmSaving(true)
     try {
       const updated = await updateLLMConfig({
-        provider: ' ',
-        base_url: ' ',
-        model_name: ' ',
-        api_key: ' ',
+        provider: '',
+        base_url: '',
+        model_name: '',
+        api_key: '',
       })
       setUser(updated)
       setProvider('')

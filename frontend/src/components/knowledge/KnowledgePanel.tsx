@@ -2,35 +2,25 @@ import { useState, useEffect, useRef, type ChangeEvent } from 'react'
 import type { Document } from '@/types'
 import { listDocuments, uploadDocument, deleteDocument, queryKnowledgeBase } from '@/services/ragService'
 import { IconFile, IconUpload, IconTrash, IconSearch, IconRefresh, IconX } from '@/components/ui/Icons'
-
-const statusLabels: Record<string, string> = {
-  queued: '排队中',
-  processing: '处理中',
-  ready: '就绪',
-  failed: '失败',
-}
-
-const statusColors: Record<string, string> = {
-  queued: 'bg-[var(--text-tertiary)]',
-  processing: 'bg-brand-500',
-  ready: 'bg-[var(--color-success)]',
-  failed: 'bg-[var(--color-error)]',
-}
+import { statusLabels, statusColors } from '@/components/knowledge/constants'
 
 export default function KnowledgePanel() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
   const [query, setQuery] = useState('')
   const [queryResult, setQueryResult] = useState<{ answer: string; source_chunks: string[] } | null>(null)
   const [querying, setQuerying] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   async function loadDocs() {
+    setError('')
     try {
       const data = await listDocuments()
       setDocuments(data)
     } catch {
+      setError('加载文档失败')
     } finally {
       setLoading(false)
     }
@@ -43,20 +33,26 @@ export default function KnowledgePanel() {
   async function handleUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    setError('')
     setUploading(true)
     try {
       await uploadDocument(file)
       await loadDocs()
-    } catch {}
+    } catch {
+      setError('上传失败，请重试')
+    }
     if (fileRef.current) fileRef.current.value = ''
     setUploading(false)
   }
 
   async function handleDelete(id: number) {
+    setError('')
     try {
       await deleteDocument(id)
       await loadDocs()
-    } catch {}
+    } catch {
+      setError('删除失败，请重试')
+    }
   }
 
   async function handleQuery() {
@@ -94,6 +90,8 @@ export default function KnowledgePanel() {
           <p className="text-xs text-[var(--text-tertiary)] mt-1">支持 .txt .md .pdf</p>
         </button>
       </div>
+
+      {error && <p className="text-sm text-[var(--color-error)] bg-[var(--color-error)]/10 rounded-lg px-3 py-2">{error}</p>}
 
       <div>
         <div className="relative">

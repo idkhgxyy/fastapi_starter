@@ -4,6 +4,7 @@ import { sendChatMessage, streamChatMessage } from '@/services/chatService'
 
 function generateId() {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
 }
 
 export function useChat() {
@@ -31,6 +32,25 @@ export function useChat() {
     setIsStreaming(true)
 
     try {
+      // 优先使用非流式请求（支持 Tool Calling），失败后回退到流式
+      try {
+        const reply = await sendChatMessage(content.trim())
+        if (reply) {
+          setMessages((prev) => {
+            const updated = [...prev]
+            const last = updated[updated.length - 1]
+            if (last?.id === assistantMessage.id) {
+              updated[updated.length - 1] = { ...last, content: reply }
+            }
+            return updated
+          })
+          return
+        }
+      } catch {
+        // 非流式请求失败，回退到流式
+      }
+
+      // 流式回退
       const generator = streamChatMessage(content.trim())
       let fullContent = ''
       let reasoningContent = ''
@@ -72,32 +92,18 @@ export function useChat() {
         })
       }
 
-      if (!hasError && !fullContent) {
-        try {
-          const reply = await sendChatMessage(content.trim())
-          if (reply) {
-            setMessages((prev) => {
-              const updated = [...prev]
-              const last = updated[updated.length - 1]
-              if (last?.id === assistantMessage.id) {
-                updated[updated.length - 1] = { ...last, content: reply }
-              }
-              return updated
-            })
-          }
-        } catch (e) {
-          setMessages((prev) => {
-            const updated = [...prev]
-            const last = updated[updated.length - 1]
-            if (last?.id === assistantMessage.id) {
-              updated[updated.length - 1] = {
-                ...last,
-                content: `请求失败：${e instanceof Error ? e.message : '未知错误'}`,
-              }
+      if (hasError || !fullContent) {
+        setMessages((prev) => {
+          const updated = [...prev]
+          const last = updated[updated.length - 1]
+          if (last?.id === assistantMessage.id && !last.content) {
+            updated[updated.length - 1] = {
+              ...last,
+              content: '请求失败，请重试',
             }
-            return updated
-          })
-        }
+          }
+          return updated
+        })
       }
     } finally {
       setIsStreaming(false)

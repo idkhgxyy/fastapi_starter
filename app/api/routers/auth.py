@@ -56,6 +56,11 @@ async def initial_setup(
 
     user = UserService.create_user(db, user_in)
 
+    # 首个用户设为超级管理员
+    user.is_superuser = True
+    db.commit()
+    db.refresh(user)
+
     # 如果提供了 LLM API Key，同时配置
     if setup_in.llm_api_key:
         from app.schemas.user import UserLLMConfigUpdate

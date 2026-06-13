@@ -26,3 +26,66 @@ export async function queryKnowledgeBase(query: string, topK = 3): Promise<{ ans
   })
   return response.data
 }
+
+export async function* streamQueryKnowledgeBase(
+  query: string,
+  topK = 3,
+): AsyncGenerator<{ content?: string; source_chunks?: string[]; error?: string }> {
+  const token = localStorage.getItem('agent_token')
+  const baseUrl = import.meta.env.VITE_API_BASE || '/api/v1'
+  const url = `${baseUrl}/rag/query/stream`
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ query, top_k: topK }),
+  })
+
+  if (!response.ok) {
+    let errorMsg = '查询失败'
+    try {
+      const err = await response.json()
+      errorMsg = err.detail || errorMsg
+    } catch {}
+    yield { error: errorMsg }
+    return
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) {
+    yield { error: '无法读取响应流' }
+    return
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || !trimmed.startsWith('data: ')) continue
+
+        const data = trimmed.slice(6)
+        if (data === '[DONE]') return
+
+        try {
+          const parsed = JSON.parse(data)
+          yield parsed
+        } catch {}
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
