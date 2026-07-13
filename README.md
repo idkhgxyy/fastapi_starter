@@ -2,7 +2,7 @@
 
 [中文版 / Chinese](README.zh-CN.md)
 
-A production-grade full-stack AI Agent system built with **FastAPI + React + PostgreSQL(pgvector) + Redis + Celery + Ollama**. Features JWT authentication, tenant-isolated RAG knowledge base, Tool Calling via MCP protocol, async document processing, and comprehensive observability.
+A production-grade full-stack AI Agent system built with **FastAPI + React + PostgreSQL(pgvector) + Redis + Celery + Ollama**. Features JWT authentication, tenant-isolated RAG knowledge base, Tool Calling via OpenAI function calling, async document processing, and comprehensive observability.
 
 ## Highlights
 
@@ -11,7 +11,7 @@ A production-grade full-stack AI Agent system built with **FastAPI + React + Pos
 - `Celery + Redis` async task processing with `Flower` monitoring dashboard
 - `Ollama` local deployment of `qwen2.5:3b` and `bge-m3`
 - `RAG` supporting `.txt` / `.md` / `.pdf` uploads, tenant-isolated, async chunking & vectorization
-- `BGE-Reranker` optional re-ranking for improved recall quality
+- `BGE-Reranker` optional re-ranking for improved recall quality (requires `sentence-transformers`)
 - `Tool Calling` with 5 tools: weather, task creation, system status, task list, math calculator
 - `Multi-Tenant BYOK` — each user configures their own LLM provider and API key (Fernet-encrypted)
 - `Prometheus + Grafana` monitoring for request volume, latency, and error rate
@@ -23,8 +23,8 @@ A production-grade full-stack AI Agent system built with **FastAPI + React + Pos
 - `129 unit tests` + pre-commit hooks (ruff lint/format)
 - **Auto Mock mode** — no API Key? No problem. System auto-enables Mock mode when `LLM_API_KEY` is empty
 - **`make setup` one-click start** — auto-generates SECRET_KEY, seeds demo data, pulls Ollama models
-- **Docker Compose Profiles** — core 4 containers by default, `--profile full` adds Ollama, `--profile monitor` adds Grafana/Prometheus
-- **Modern React SPA frontend** — 8 route pages covering chat, knowledge base, tasks, observability, settings, health
+- **Docker Compose Profiles** — core 4 containers by default, `--profile full` adds Ollama, `--profile monitor` adds Grafana/Prometheus/Flower
+- **Modern React SPA frontend** — 9 route pages covering chat, knowledge base, tasks, observability, settings, health
 - **SSE streaming rendering** — typewriter-effect real-time chat display
 - **Mock mode** — full offline development without a running backend
 - **Refined minimal design** — dual theme, JetBrains Mono + Plus Jakarta Sans, three-column layout
@@ -76,7 +76,7 @@ flowchart LR
 ### 1. Auth & Users
 - Register / Login / JWT authentication
 - Active user verification
-- Superuser permission escalation
+- Superuser-only endpoint access
 
 ### 2. Task System
 - Create, update, delete, paginated list
@@ -87,8 +87,8 @@ flowchart LR
 - Tenant-isolated document storage
 - Celery async text chunking and vectorization
 - Cosine similarity search via `pgvector`
-- Optional `BGE-Reranker` cross-encoder re-ranking
-- Answers include source citations
+- Optional `BGE-Reranker` cross-encoder re-ranking (requires `pip install sentence-transformers`)
+- Responses include relevant source text excerpts
 - `session_id` multi-turn conversation memory
 
 ### 4. LLM & Agent
@@ -125,23 +125,33 @@ app/
   models/       # ORM models
   schemas/      # Pydantic schemas
   services/     # Business logic layer
+  static/       # Static files (demo.html, frontend build)
+  utils/        # Encryption, error handling, file parsing, rate limiting
   worker/       # Celery tasks
 alembic/        # Database migrations
 frontend/       # React SPA
   src/
+    assets/     # Static assets (fonts, images)
     components/ # UI components (auth/chat/knowledge/tasks/observability/layout/ui)
     contexts/   # AuthContext, ThemeContext
     hooks/      # useChat SSE streaming hook
     mock/       # Mock data layer (full API coverage)
-    pages/      # 8 route pages
-    services/   # 7 API service modules
+    pages/      # 9 route pages
+    services/   # 8 API service modules
     types/      # TypeScript type definitions
+    utils/      # Utility functions
 grafana/        # Grafana provisioning & dashboards
 tests/          # Pytest unit tests
 scripts/        # Bootstrap & eval scripts
 ```
 
 > **Detailed architecture and class docs: [CODE_WIKI.md](docs/CODE_WIKI.md)**
+
+## Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/install/) (v2)
+- `make` (pre-installed on macOS; on Windows use WSL or install via [chocolatey](https://chocolatey.org/packages/make))
+- (Optional) [Ollama](https://ollama.com/) for local LLM and embedding model
 
 ## Quick Start
 
@@ -193,6 +203,10 @@ make test          # Run pytest
 make ollama-pull   # Pull Ollama models
 make shell         # Enter API container shell
 make clean         # Remove containers + volumes
+make restart       # Restart all services
+make logs-worker   # View Celery worker logs
+make db-shell      # Enter PostgreSQL shell
+make redis-cli     # Enter Redis CLI
 ```
 
 ### Demo account
@@ -231,7 +245,7 @@ The pre-built image includes both backend and frontend — just open `http://loc
 | Frontend SPA (mock) | `http://localhost:5173` | `cd frontend && npx vite --host --mode mock` |
 | Legacy Demo Page | `http://localhost:8000/demo.html` | Lightweight HTML demo |
 | Prometheus | `http://localhost:9090` | Metrics explorer |
-| Grafana | `http://localhost:3000` | admin / admin |
+| Grafana | `http://localhost:3000` | admin / admin (change in production) |
 | Flower | `http://localhost:5555` | Celery monitoring |
 
 ## Screenshots
@@ -258,7 +272,7 @@ The pre-built image includes both backend and frontend — just open `http://loc
 ```bash
 curl -X POST "http://localhost:8000/api/v1/auth/login" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=admin@example.com&password=password123"
+  -d "username=demo@example.com&password=demo123456"
 ```
 
 ### 2. AI Chat
@@ -374,10 +388,18 @@ This project demonstrates end-to-end implementation of an AI Agent system — fr
 
 Key capabilities:
 - **Backend**: FastAPI layered architecture (Router → Service → Model), SQLAlchemy 2.0, Alembic migrations
-- **AI Integration**: Ollama / OpenAI-compatible APIs, 5 MCP-registered tools, agentic multi-round conversation
+- **AI Integration**: Ollama / OpenAI-compatible APIs, 5 tools via OpenAI function calling, agentic multi-round conversation
 - **RAG Pipeline**: Multi-format document ingestion, pgvector cosine search, optional BGE-Reranker
 - **Frontend**: React SPA with SSE streaming chat, Recharts observability dashboards, Mock mode
 - **DevOps**: Docker Compose (8 services), GitHub Actions CI, Prometheus + Grafana, LLM call logging
 - **Security**: JWT + bcrypt auth, Fernet-encrypted API keys, Redis sliding-window rate limiting, tenant data isolation
 
 Detailed architecture, module documentation, and migration history: [docs/](docs/)
+
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code style, and PR process.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

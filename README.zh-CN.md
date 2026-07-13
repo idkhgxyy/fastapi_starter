@@ -2,7 +2,7 @@
 
 [English version / 英文版](README.md)
 
-基于 **FastAPI + React + PostgreSQL(pgvector) + Redis + Celery + Ollama** 构建的生产级全栈 AI Agent 系统。支持 JWT 鉴权、租户隔离的 RAG 知识库、MCP 协议 Tool Calling、异步文档处理与全方位可观测性。
+基于 **FastAPI + React + PostgreSQL(pgvector) + Redis + Celery + Ollama** 构建的生产级全栈 AI Agent 系统。支持 JWT 鉴权、租户隔离的 RAG 知识库、OpenAI Tool Calling、异步文档处理与全方位可观测性。
 
 ## 项目亮点
 
@@ -11,7 +11,7 @@
 - `Celery + Redis` 支持异步任务处理，`Flower` 可视化监控面板
 - `Ollama` 本地部署 `qwen2.5:3b` 与 `bge-m3`
 - `RAG` 支持 `.txt` / `.md` / `.pdf` 多格式文档上传，按用户隔离，异步切分与向量化
-- `BGE-Reranker` 可选启用二次重排，提升知识库召回结果排序质量
+- `BGE-Reranker` 可选启用二次重排，提升知识库召回结果排序质量（需额外安装 `sentence-transformers`）
 - `Tool Calling` 支持 5 个工具（天气查询、创建任务、系统状态、任务列表、数学计算器）
 - `Multi-Tenant BYOK` 每个用户可独立配置自有大模型厂商与 API Key（Fernet 加密）
 - `Prometheus + Grafana` 监控请求量、延迟与错误率，预置看板
@@ -23,8 +23,8 @@
 - `129 个单元测试` + pre-commit hooks（ruff lint/format）
 - **Mock 模式自动启用** — 无需 API Key，`LLM_API_KEY` 为空时自动切换 Mock 模式
 - **`make setup` 一键启动** — 自动生成 SECRET_KEY、灌入 demo 数据、拉取 Ollama 模型
-- **Docker Compose Profile 分层** — 核心 4 容器默认启动，`--profile full` 加 Ollama，`--profile monitor` 加监控
-- **现代化 React SPA 前端** — 8 个独立路由页面，覆盖聊天、知识库、任务、可观测性、设置、健康监控
+- **Docker Compose Profile 分层** — 核心 4 容器默认启动，`--profile full` 加 Ollama，`--profile monitor` 加监控（Grafana/Prometheus/Flower）
+- **现代化 React SPA 前端** — 9 个独立路由页面，覆盖聊天、知识库、任务、可观测性、设置、健康监控
 - **SSE 流式渲染** — 支持打字机效果的流式对话展示
 - **全 Mock 模式** — 无需后端即可独立开发调试
 - **精致克制的前端设计** — 双主题、JetBrains Mono + Plus Jakarta Sans 字体体系、三栏布局
@@ -76,7 +76,7 @@ flowchart LR
 ### 1. 用户与权限
 - 注册 / 登录 / JWT 认证
 - 用户状态校验
-- 超级管理员权限扩展
+- 超级管理员专属接口权限
 
 ### 2. 任务系统
 - 任务创建、更新、删除、分页查询
@@ -87,8 +87,8 @@ flowchart LR
 - 文档按用户隔离存储
 - Celery 异步执行文本切分与向量化
 - 基于 `pgvector` 的余弦相似度检索
-- 可选使用 `BGE-Reranker` 做二次重排
-- 问答结果附带引用片段
+- 可选使用 `BGE-Reranker` 做二次重排（需 `pip install sentence-transformers`）
+- 问答结果附带相关原文片段
 - 支持 `session_id` 多轮对话上下文记忆
 
 ### 4. LLM 与 Agent
@@ -125,23 +125,33 @@ app/
   models/       # ORM 模型
   schemas/      # Pydantic 模型
   services/     # 业务逻辑层
+  static/       # 静态文件（demo.html、前端构建产物）
+  utils/        # 加密、错误处理、文件解析、限流
   worker/       # Celery 任务
 alembic/        # 数据库迁移
 frontend/       # React SPA 前端
   src/
+    assets/     # 静态资源（字体、图片）
     components/ # UI 组件（auth/chat/knowledge/tasks/observability/layout/ui）
     contexts/   # AuthContext, ThemeContext
     hooks/      # useChat 流式对话 Hook
     mock/       # Mock 数据层（全 API 覆盖）
-    pages/      # 8 个路由页面
-    services/   # 7 个 API Service 模块
+    pages/      # 9 个路由页面
+    services/   # 8 个 API Service 模块
     types/      # TypeScript 类型定义
+    utils/      # 工具函数
 grafana/        # Grafana provisioning 与 dashboard
 tests/          # Pytest 测试
 scripts/        # 初始化脚本、评测脚本
 ```
 
 > **详细的模块架构与类说明，请参考 [CODE_WIKI.md](docs/CODE_WIKI.md)**
+
+## 前置要求
+
+- [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/install/)（v2）
+- `make`（macOS 自带；Windows 请使用 WSL 或通过 [chocolatey](https://chocolatey.org/packages/make) 安装）
+- （可选）[Ollama](https://ollama.com/) 用于本地运行 LLM 和 Embedding 模型
 
 ## 一键启动
 
@@ -193,6 +203,10 @@ make test          # 运行 pytest
 make ollama-pull   # 拉取 Ollama 模型
 make shell         # 进入 API 容器
 make clean         # 清理容器和数据卷
+make restart       # 重启所有服务
+make logs-worker   # 查看 Celery Worker 日志
+make db-shell      # 进入 PostgreSQL Shell
+make redis-cli     # 进入 Redis CLI
 ```
 
 ### Demo 账号
@@ -201,6 +215,25 @@ make clean         # 清理容器和数据卷
 make seed
 # 邮箱: demo@example.com  密码: demo123456
 ```
+
+### 使用预构建 Docker 镜像
+
+```bash
+# 从 GitHub Container Registry 拉取
+docker pull ghcr.io/idkhgxyy/fastapi_starter:main
+
+# 搭配外部 PostgreSQL 和 Redis 运行
+docker run -d -p 8000:8000 \
+  -e DATABASE_URL=postgresql+psycopg://postgres:postgres@host.docker.internal:5432/fastapi_db \
+  -e REDIS_URL=redis://host.docker.internal:6379/0 \
+  -e LLM_API_KEY=your-key-here \
+  ghcr.io/idkhgxyy/fastapi_starter:main
+
+# 或使用 Docker Compose（推荐）
+docker compose up -d
+```
+
+预构建镜像已包含后端和前端——打开 `http://localhost:8000` 即可使用。
 
 ## 常用访问地址
 
@@ -212,7 +245,7 @@ make seed
 | 前端 SPA（Mock 模式）| `http://localhost:5173` | `cd frontend && npx vite --host --mode mock` |
 | 旧版 Demo 页面 | `http://localhost:8000/demo.html` | 轻量 HTML Demo |
 | Prometheus | `http://localhost:9090` | 指标查询 |
-| Grafana | `http://localhost:3000` | admin / admin |
+| Grafana | `http://localhost:3000` | admin / admin（生产环境请修改） |
 | Flower | `http://localhost:5555` | Celery 任务监控 |
 
 ## 界面展示
@@ -239,7 +272,7 @@ make seed
 ```bash
 curl -X POST "http://localhost:8000/api/v1/auth/login" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=admin@example.com&password=password123"
+  -d "username=demo@example.com&password=demo123456"
 ```
 
 ### 2. AI 对话
@@ -355,10 +388,18 @@ locust -f scripts/locustfile.py --host=http://localhost:8000
 
 核心能力：
 - **后端**：FastAPI 分层架构（Router → Service → Model），SQLAlchemy 2.0，Alembic 迁移
-- **AI 集成**：Ollama / OpenAI 兼容 API，5 个 MCP 注册工具，Agent 式多轮对话
+- **AI 集成**：Ollama / OpenAI 兼容 API，5 个工具（OpenAI function calling），Agent 式多轮对话
 - **RAG 管线**：多格式文档接入，pgvector 余弦检索，可选 BGE-Reranker 重排
 - **前端**：React SPA，SSE 流式聊天，Recharts 可观测面板，Mock 离线模式
 - **DevOps**：Docker Compose（8 个服务），GitHub Actions CI，Prometheus + Grafana，LLM 调用日志
 - **安全**：JWT + bcrypt 鉴权，Fernet 加密 API Key，Redis 滑动窗口限流，租户数据隔离
 
 详细架构、模块文档与变更历史：[docs/](docs/)
+
+## 参与贡献
+
+欢迎贡献代码！请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发环境搭建、代码规范与 PR 流程。
+
+## 开源协议
+
+本项目基于 [MIT License](LICENSE) 开源。
