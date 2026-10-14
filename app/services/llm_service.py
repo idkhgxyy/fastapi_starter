@@ -20,6 +20,11 @@ from app.core.config import settings
 from app.core.logging import logger
 from app.models.task import Task
 from app.models.user import User
+from app.services.cost_guard import (
+    budget_reject_message,
+    check_budget,
+    get_model_prices,
+)
 from app.services.llm_observability_service import (
     create_llm_call_log,
     elapsed_ms,
@@ -292,10 +297,18 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
     """
     user = db.get(User, current_user_id) if db and current_user_id else None
 
+    # 成本熔断：累计花费达到红线后拒绝调用
+    if db:
+        budget = check_budget(db, current_user_id)
+        if not budget.allowed:
+            return budget_reject_message(budget)
+
     info = get_llm_client(user)
 
     if not info.client.api_key:
         return "【系统提示】大模型 API Key 尚未配置，请在系统或个人设置中配置。"
+
+    provider = (user.llm_provider if user else None) or settings.LLM_PROVIDER
 
     started_at = start_timer()
 
@@ -415,6 +428,8 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
                     total_tokens=total_tokens,
                     latency_ms=elapsed_ms(started_at),
                     status="success",
+                    model_name=info.model_name,
+                    provider=provider,
                 )
             return final_reply
 
@@ -434,6 +449,8 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
                     total_tokens=total_tokens,
                     latency_ms=elapsed_ms(started_at),
                     status="success",
+                    model_name=info.model_name,
+                    provider=provider,
                 )
             return final_reply
 
@@ -453,6 +470,8 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
                 latency_ms=elapsed_ms(started_at),
                 status="failed",
                 error_message=str(e),
+                model_name=info.model_name,
+                provider=provider,
             )
         return f"【系统提示】模型调用失败，请检查网络或 API 配置。错误详情: {str(e)}"
 
@@ -463,11 +482,25 @@ async def generate_chat_reply_stream(message: str, db: Session = None, current_u
     这里为了演示，提供最基础的流式输出支持。
     """
     user = db.get(User, current_user_id) if db and current_user_id else None
+
+    # 成本熔断：累计花费达到红线后拒绝调用
+    if db:
+        budget = check_budget(db, current_user_id)
+        if not budget.allowed:
+            error = json.dumps({"error": budget_reject_message(budget)}, ensure_ascii=False)
+            yield f"data: {error}\n\n"
+            return
+
     info = get_llm_client(user)
 
     if not info.client.api_key:
         yield 'data: {"error": "API Key 未配置"}\n\n'
         return
+
+    provider = (user.llm_provider if user else None) or settings.LLM_PROVIDER
+    started_at = start_timer()
+    prompt_tokens = completion_tokens = total_tokens = 0
+    content_parts = []
 
     messages = [
         {"role": "system", "content": "你是一个有用的 AI 助手。"},
@@ -476,10 +509,21 @@ async def generate_chat_reply_stream(message: str, db: Session = None, current_u
 
     try:
         response = await info.client.chat.completions.create(
-            model=info.model_name, messages=messages, temperature=0.7, stream=True
+            model=info.model_name,
+            messages=messages,
+            temperature=0.7,
+            stream=True,
+            # 请求最后一个 chunk 携带 usage（OpenAI 兼容协议），用于成本统计与熔断
+            stream_options={"include_usage": True},
         )
 
         async for chunk in response:
+            # 流式协议中 usage 随空的 choices 附在最后一个 chunk
+            if getattr(chunk, "usage", None):
+                prompt_tokens = getattr(chunk.usage, "prompt_tokens", 0) or 0
+                completion_tokens = getattr(chunk.usage, "completion_tokens", 0) or 0
+                total_tokens = getattr(chunk.usage, "total_tokens", 0) or 0
+
             delta = chunk.choices[0].delta if chunk.choices else None
             if not delta:
                 continue
@@ -487,13 +531,48 @@ async def generate_chat_reply_stream(message: str, db: Session = None, current_u
             if getattr(delta, "reasoning_content", None):
                 payload["reasoning"] = delta.reasoning_content
             if delta.content:
+                content_parts.append(delta.content)
                 payload["content"] = delta.content
             if payload:
                 yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
         yield "data: [DONE]\n\n"
 
+        if db:
+            create_llm_call_log(
+                db,
+                user_id=current_user_id,
+                endpoint="/api/v1/chat",
+                prompt=message,
+                response="".join(content_parts) or None,
+                tool_calls=None,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                latency_ms=elapsed_ms(started_at),
+                status="success",
+                model_name=info.model_name,
+                provider=provider,
+            )
+
     except Exception as e:
         logger.error(f"LLM Stream 调用失败: {str(e)}")
+        if db:
+            create_llm_call_log(
+                db,
+                user_id=current_user_id,
+                endpoint="/api/v1/chat",
+                prompt=message,
+                response=None,
+                tool_calls=None,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                latency_ms=elapsed_ms(started_at),
+                status="failed",
+                error_message=str(e),
+                model_name=info.model_name,
+                provider=provider,
+            )
         data = json.dumps({"error": str(e)}, ensure_ascii=False)
         yield f"data: {data}\n\n"

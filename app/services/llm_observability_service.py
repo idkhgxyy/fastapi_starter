@@ -66,13 +66,16 @@ def create_llm_call_log(
     latency_ms: float,
     status: str,
     error_message: Optional[str] = None,
+    model_name: Optional[str] = None,
+    provider: Optional[str] = None,
 ) -> None:
     try:
         log = LLMCallLog(
             user_id=user_id,
             endpoint=endpoint,
-            model_name=settings.LLM_MODEL_NAME,
-            provider=settings.LLM_PROVIDER,
+            # 优先记录本次调用实际使用的模型/服务商，未提供时回退全局配置
+            model_name=model_name or settings.LLM_MODEL_NAME,
+            provider=provider or settings.LLM_PROVIDER,
             request_id=get_request_id(),
             prompt=prompt,
             response=response,

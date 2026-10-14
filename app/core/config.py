@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -36,8 +38,16 @@ class Settings(BaseSettings):
     LLM_INPUT_PRICE_PER_1K_TOKENS: float = 0.0
     LLM_OUTPUT_PRICE_PER_1K_TOKENS: float = 0.0
 
+    # 成本熔断（BYOK 云端模型按量计费，单位：元/CNY）
+    # 红线默认 45 元：对应 50 元的节省计划预留 5 元缓冲（出账有 2~10 分钟延迟）。
+    # 设为 <=0 可关闭熔断。单价为忙时价（保守估计，闲时实际花费更低）。
+    LLM_BUDGET_CNY: float = 45.0
+    LLM_INPUT_PRICE_PER_1M: float = 3.0
+    LLM_OUTPUT_PRICE_PER_1M: float = 9.0
+
     # Mock 模式 — 开启后 LLM 调用返回预设回复，无需 API Key
-    LLM_MOCK: bool = False
+    # None 表示未显式配置；LLM_API_KEY 为空且未显式配置时才自动启用 Mock
+    LLM_MOCK: Optional[bool] = None
 
     # Embedding 配置（独立于 LLM，默认指向本地 Ollama）
     EMBEDDING_BASE_URL: str = "http://localhost:11434/v1"
@@ -52,15 +62,21 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _auto_enable_mock(self) -> "Settings":
-        """LLM_API_KEY 为空时自动启用 Mock 模式，实现开箱即用"""
-        if not self.LLM_API_KEY and not self.LLM_MOCK:
+        """LLM_API_KEY 为空且未显式配置 LLM_MOCK 时自动启用 Mock 模式，实现开箱即用。
+
+        用户显式设置 LLM_MOCK=false 时必须尊重（例如纯 BYOK 场景：无全局 Key，
+        每个用户自带 Key），不能强行覆盖。
+        """
+        if not self.LLM_API_KEY and self.LLM_MOCK is None:
             import logging
 
             logging.getLogger(__name__).warning(
-                "LLM_API_KEY 未设置，已自动启用 Mock 模式。"
-                "设置 LLM_API_KEY 或 LLM_MOCK=false 可关闭。"
+                "LLM_API_KEY 未设置且未显式配置 LLM_MOCK，已自动启用 Mock 模式。"
+                "设置 LLM_API_KEY 或在配置中显式设置 LLM_MOCK=false 可关闭。"
             )
             self.LLM_MOCK = True
+        elif self.LLM_MOCK is None:
+            self.LLM_MOCK = False
         return self
 
     model_config = SettingsConfigDict(
