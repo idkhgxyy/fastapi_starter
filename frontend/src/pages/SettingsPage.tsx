@@ -34,7 +34,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     getCurrentUser().then((u) => setUser(u)).catch(() => {})
-    api.get<HealthStatus>('/health').then((r) => setHealth(r.data)).catch(() => {})
+    api.get<HealthStatus>('/health/').then((r) => setHealth(r.data)).catch(() => {})
   }, [setUser])
 
   useEffect(() => {
