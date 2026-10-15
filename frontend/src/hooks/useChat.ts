@@ -10,6 +10,12 @@ function generateId() {
 export function useChat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
+  // 同一次页面会话内共享一个 session_id，后端据此维持多轮上下文
+  const [sessionId] = useState(() =>
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `sess_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  )
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isStreaming) return
@@ -34,7 +40,7 @@ export function useChat() {
     try {
       // 优先使用非流式请求（支持 Tool Calling），失败后回退到流式
       try {
-        const reply = await sendChatMessage(content.trim())
+        const reply = await sendChatMessage(content.trim(), sessionId)
         if (reply) {
           setMessages((prev) => {
             const updated = [...prev]
@@ -51,7 +57,7 @@ export function useChat() {
       }
 
       // 流式回退
-      const generator = streamChatMessage(content.trim())
+      const generator = streamChatMessage(content.trim(), sessionId)
       let fullContent = ''
       let reasoningContent = ''
       let hasError = false
@@ -108,7 +114,7 @@ export function useChat() {
     } finally {
       setIsStreaming(false)
     }
-  }, [isStreaming])
+  }, [isStreaming, sessionId])
 
   const clearMessages = useCallback(() => {
     setMessages([])

@@ -28,13 +28,19 @@ async def chat_with_ai(
         # 流式返回
         return StreamingResponse(
             generate_chat_reply_stream(
-                message=request.message, db=db, current_user_id=current_user.id
+                message=request.message,
+                db=db,
+                current_user_id=current_user.id,
+                session_id=request.session_id,
             ),
             media_type="text/event-stream",
         )
     else:
         # 阻塞返回
         reply = await generate_chat_reply(
-            message=request.message, db=db, current_user_id=current_user.id
+            message=request.message,
+            db=db,
+            current_user_id=current_user.id,
+            session_id=request.session_id,
         )
         return ChatResponse(reply=reply)

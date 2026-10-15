@@ -33,8 +33,13 @@ from app.services.llm_observability_service import (
     start_timer,
 )
 from app.services.mcp_service import MCPService
-from app.services.rag_service import RAGService
+from app.services.rag_service import RAGService, append_session_message, load_session_history
 from app.utils.encryption import decrypt_api_key
+
+# 多轮对话注入的最大历史条数（与 Redis 会话存储的上限一致）
+MAX_HISTORY_MESSAGES = 20
+# 回答与思维链共享输出预算（deepseek-v4 系 max_tokens + thinking_budget 共 393K 上限）
+CHAT_MAX_TOKENS = 8000
 
 # 全局复用一个 AsyncOpenAI 客户端 (针对未配置自有 Key 的情况)
 _global_client = None
@@ -322,7 +327,34 @@ async def _get_knowledge_context(db: Session, current_user_id: int, message: str
         return None
 
 
-async def generate_chat_reply(message: str, db: Session = None, current_user_id: int = None) -> str:
+async def _load_history_messages(current_user_id: int, session_id: str) -> list:
+    """加载多轮对话历史（Redis），异常时返回空列表不影响对话"""
+    if not session_id:
+        return []
+    try:
+        history = await load_session_history(current_user_id, session_id)
+        return [h for h in history if h.get("role") in ("user", "assistant") and h.get("content")]
+    except Exception as e:
+        logger.warning(f"加载会话历史失败（不影响本次对话）: {e}")
+        return []
+
+
+async def _save_history_messages(
+    current_user_id: int, session_id: str, messages: list
+) -> None:
+    """把本轮 user/assistant 消息追加到 Redis 会话历史"""
+    if not session_id:
+        return
+    try:
+        for m in messages:
+            await append_session_message(current_user_id, session_id, m["role"], m["content"])
+    except Exception as e:
+        logger.warning(f"保存会话历史失败（不影响本次对话）: {e}")
+
+
+async def generate_chat_reply(
+    message: str, db: Session = None, current_user_id: int = None, session_id: str = None
+) -> str:
     """
     调用大语言模型生成回复 (带 Tool Calling 支持)
     """
@@ -372,6 +404,11 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
             system_prompt = f"{system_prompt}\n\n{knowledge_context}"
         messages[0]["content"] = system_prompt
 
+        # 注入多轮对话历史，使模型具备上下文记忆
+        history = await _load_history_messages(current_user_id, session_id)
+        if history:
+            messages = [messages[0]] + history[-MAX_HISTORY_MESSAGES:] + [messages[1]]
+
         response = await _llm_completion_with_retry(
             info.client,
             model=info.model_name,
@@ -379,7 +416,7 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
             tools=MCPService.list_tools(),
             tool_choice="auto",
             temperature=0.1,
-            max_tokens=1000,
+            max_tokens=CHAT_MAX_TOKENS,
         )
 
         response_message = response.choices[0].message
@@ -442,7 +479,7 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
                 model=info.model_name,
                 messages=messages,
                 temperature=0.7,
-                max_tokens=1000,
+                max_tokens=CHAT_MAX_TOKENS,
             )
             prompt_tokens, completion_tokens, used_tokens = extract_usage(second_response)
             total_prompt_tokens += prompt_tokens
@@ -465,6 +502,15 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
                     model_name=info.model_name,
                     provider=provider,
                 )
+            if session_id and final_reply:
+                await _save_history_messages(
+                    current_user_id,
+                    session_id,
+                    [
+                        {"role": "user", "content": message},
+                        {"role": "assistant", "content": final_reply},
+                    ],
+                )
             return final_reply
 
         else:
@@ -485,6 +531,15 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
                     status="success",
                     model_name=info.model_name,
                     provider=provider,
+                )
+            if session_id and final_reply:
+                await _save_history_messages(
+                    current_user_id,
+                    session_id,
+                    [
+                        {"role": "user", "content": message},
+                        {"role": "assistant", "content": final_reply},
+                    ],
                 )
             return final_reply
 
@@ -510,7 +565,9 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
         return f"【系统提示】模型调用失败，请检查网络或 API 配置。错误详情: {str(e)}"
 
 
-async def generate_chat_reply_stream(message: str, db: Session = None, current_user_id: int = None):
+async def generate_chat_reply_stream(
+    message: str, db: Session = None, current_user_id: int = None, session_id: str = None
+):
     """
     流式调用大语言模型生成回复 (SSE)。不支持 Tool Calling，如果需要 Tool Calling 建议先判断。
     这里为了演示，提供最基础的流式输出支持。
@@ -541,10 +598,15 @@ async def generate_chat_reply_stream(message: str, db: Session = None, current_u
     if knowledge_context:
         system_content = f"{system_content}\n\n{knowledge_context}"
 
-    messages = [
+    base_messages = [
         {"role": "system", "content": system_content},
         {"role": "user", "content": message},
     ]
+    history = await _load_history_messages(current_user_id, session_id)
+    if history:
+        messages = [base_messages[0]] + history[-MAX_HISTORY_MESSAGES:] + [base_messages[1]]
+    else:
+        messages = base_messages
 
     try:
         response = await info.client.chat.completions.create(
@@ -592,6 +654,16 @@ async def generate_chat_reply_stream(message: str, db: Session = None, current_u
                 status="success",
                 model_name=info.model_name,
                 provider=provider,
+            )
+        full_content = "".join(content_parts)
+        if session_id and full_content:
+            await _save_history_messages(
+                current_user_id,
+                session_id,
+                [
+                    {"role": "user", "content": message},
+                    {"role": "assistant", "content": full_content},
+                ],
             )
 
     except Exception as e:
