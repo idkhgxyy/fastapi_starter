@@ -33,6 +33,7 @@ from app.services.llm_observability_service import (
     start_timer,
 )
 from app.services.mcp_service import MCPService
+from app.services.rag_service import RAGService
 from app.utils.encryption import decrypt_api_key
 
 # 全局复用一个 AsyncOpenAI 客户端 (针对未配置自有 Key 的情况)
@@ -291,6 +292,36 @@ async def _llm_completion_with_retry(llm_client, **kwargs):
             return await llm_client.chat.completions.create(**kwargs)
 
 
+async def _get_knowledge_context(db: Session, current_user_id: int, message: str) -> Union[str, None]:
+    """
+    检索用户知识库中与消息相关的片段，返回用于注入 system prompt 的上下文。
+    用户没有已就绪文档、无相关命中或检索出错时返回 None（不影响正常对话）。
+    """
+    if not db or not current_user_id:
+        return None
+    try:
+        rag_service = RAGService(db)
+        chunks = await rag_service.retrieve_relevant_chunks(
+            query=message, owner_id=current_user_id, top_k=3
+        )
+        if not chunks:
+            return None
+
+        logger.info(f"==> 知识库命中 {len(chunks)} 个相关片段，注入对话上下文")
+        context_str = "\n\n".join(
+            f"[相关片段 {i}]:\n{chunk.content}" for i, chunk in enumerate(chunks, 1)
+        )
+        return (
+            "此外，以下是用户个人知识库（其上传的文档）中与问题可能相关的参考资料：\n\n"
+            f"=== 知识库参考资料 ===\n{context_str}\n=== 结束 ===\n"
+            "如果参考资料与用户的问题相关，请优先基于参考资料回答，并说明信息来自用户的知识库文档；"
+            "如果与问题无关，请忽略参考资料，正常回答或使用工具。"
+        )
+    except Exception as e:
+        logger.warning(f"知识库检索失败（不影响正常对话）: {e}")
+        return None
+
+
 async def generate_chat_reply(message: str, db: Session = None, current_user_id: int = None) -> str:
     """
     调用大语言模型生成回复 (带 Tool Calling 支持)
@@ -336,6 +367,9 @@ async def generate_chat_reply(message: str, db: Session = None, current_user_id:
             "当用户要求你创建任务、复习计划、日程等事项时，你必须使用 'create_task' 工具来创建任务，不要仅仅用文字回答。"
             "调用工具时请直接返回合法的 JSON 格式工具调用指令，不要在前面或后面附加任何乱码或多余文本。"
         )
+        knowledge_context = await _get_knowledge_context(db, current_user_id, message)
+        if knowledge_context:
+            system_prompt = f"{system_prompt}\n\n{knowledge_context}"
         messages[0]["content"] = system_prompt
 
         response = await _llm_completion_with_retry(
@@ -502,8 +536,13 @@ async def generate_chat_reply_stream(message: str, db: Session = None, current_u
     prompt_tokens = completion_tokens = total_tokens = 0
     content_parts = []
 
+    system_content = "你是一个有用的 AI 助手。"
+    knowledge_context = await _get_knowledge_context(db, current_user_id, message)
+    if knowledge_context:
+        system_content = f"{system_content}\n\n{knowledge_context}"
+
     messages = [
-        {"role": "system", "content": "你是一个有用的 AI 助手。"},
+        {"role": "system", "content": system_content},
         {"role": "user", "content": message},
     ]
 
