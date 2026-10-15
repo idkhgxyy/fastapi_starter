@@ -37,6 +37,7 @@ class TestParseMd:
 
 class TestParsePdf:
     def test_parse_pdf_extracts_text(self):
+        pytest.importorskip("fpdf", reason="fpdf2 为测试依赖（requirements-dev.txt），未安装则跳过")
         from fpdf import FPDF
 
         buf = io.BytesIO()
@@ -68,6 +69,7 @@ class TestParseFileDispatch:
         assert result.file_type == "md"
 
     def test_dispatch_pdf(self):
+        pytest.importorskip("fpdf", reason="fpdf2 为测试依赖（requirements-dev.txt），未安装则跳过")
         from fpdf import FPDF
 
         buf = io.BytesIO()

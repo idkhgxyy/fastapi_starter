@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from app.models.document import DOCUMENT_STATUS_QUEUED, DOCUMENT_STATUS_READY, Document
 from app.services.rag_service import RAGService
 
@@ -199,6 +201,7 @@ def test_upload_md_document(client, monkeypatch, db_session):
 
 
 def test_upload_pdf_document(client, monkeypatch, db_session):
+    pytest.importorskip("fpdf", reason="fpdf2 为测试依赖（requirements-dev.txt），未安装则跳过")
     token = _create_user_and_login(client, "pdf-upload")
 
     import io
@@ -251,6 +254,7 @@ def test_upload_unsupported_format(client):
 
 
 def test_upload_empty_pdf(client):
+    pytest.importorskip("fpdf", reason="fpdf2 为测试依赖（requirements-dev.txt），未安装则跳过")
     token = _create_user_and_login(client, "empty-pdf")
 
     import io
