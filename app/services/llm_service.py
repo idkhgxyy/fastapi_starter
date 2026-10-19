@@ -357,8 +357,8 @@ async def _save_history_messages(
 
 
 def _build_fallback_info() -> Union[LLMClientInfo, None]:
-    """构建本地 Ollama 降级客户端；Mock 模式下不需要降级，返回 None"""
-    if settings.LLM_MOCK:
+    """构建本地 Ollama 降级客户端；Mock 模式或未启用 Ollama 时返回 None"""
+    if settings.LLM_MOCK or not settings.OLLAMA_ENABLED:
         return None
     client = AsyncOpenAI(api_key="ollama", base_url=settings.OLLAMA_BASE_URL)
     return LLMClientInfo(client=client, model_name=settings.OLLAMA_FALLBACK_MODEL)

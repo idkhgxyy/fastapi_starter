@@ -31,6 +31,8 @@ async def _check_redis() -> dict:
 
 
 async def _check_ollama() -> dict:
+    if not settings.OLLAMA_ENABLED:
+        return {"status": "disabled"}
     base_url = settings.OLLAMA_BASE_URL.rstrip("/v1").rstrip("/")
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:

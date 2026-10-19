@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434/v1"
     # 云端不可用（调用失败/预算触顶/未配置 Key）时的本地降级模型
     OLLAMA_FALLBACK_MODEL: str = "qwen2.5:3b"
+    # 轻量部署（如 2G 内存云服务器）可设为 false：不部署 Ollama，
+    # 降级链关闭、embedding 全走云端 API、健康检查不再报告 Ollama
+    OLLAMA_ENABLED: bool = True
 
     # RAG 配置
     EMBEDDING_DIMENSION: int = 1024

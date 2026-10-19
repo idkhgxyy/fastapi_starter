@@ -171,7 +171,7 @@ export default function SettingsPage() {
             <StatusCard label="Redis" status={health?.dependencies.redis.status} />
             <StatusCard label="Ollama" status={health?.dependencies.ollama.status} />
           </div>
-          {health?.dependencies.ollama.status !== 'up' && (
+          {health?.dependencies.ollama.status === 'down' && (
             <p className="mt-2 text-xs text-[var(--text-tertiary)]">
               Ollama 未运行 — RAG 文档向量化不可用。运行 <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] font-mono">make up-full</code> 启动完整服务。
             </p>
@@ -359,12 +359,13 @@ export default function SettingsPage() {
 
 function StatusCard({ label, status }: { label: string; status?: string }) {
   const isUp = status === 'up'
+  const isDisabled = status === 'disabled'
   return (
     <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)]">
-      <span className={`w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-400'}`} />
+      <span className={`w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : isDisabled ? 'bg-zinc-400' : 'bg-red-400'}`} />
       <span className="text-sm text-[var(--text-secondary)]">{label}</span>
-      <span className={`text-xs ml-auto ${isUp ? 'text-emerald-500' : 'text-red-400'}`}>
-        {isUp ? 'UP' : 'DOWN'}
+      <span className={`text-xs ml-auto ${isUp ? 'text-emerald-500' : isDisabled ? 'text-zinc-400' : 'text-red-400'}`}>
+        {isUp ? 'UP' : isDisabled ? 'OFF' : 'DOWN'}
       </span>
     </div>
   )

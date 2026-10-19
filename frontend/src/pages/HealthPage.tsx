@@ -38,7 +38,7 @@ export default function HealthPage() {
     return () => clearInterval(interval)
   }, [fetchHealth])
 
-  const allUp = health?.dependencies && Object.values(health.dependencies).every((d) => d.status === 'up')
+  const allUp = health?.dependencies && Object.values(health.dependencies).every((d) => d.status === 'up' || d.status === 'disabled')
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
@@ -92,14 +92,22 @@ export default function HealthPage() {
                           {serviceLabels[key] || key}
                         </p>
                         <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
-                          {dep.status === 'up' ? '正常运行' : dep.error || '未知状态'}
+                          {dep.status === 'up'
+                            ? '正常运行'
+                            : dep.status === 'disabled'
+                              ? '未启用（轻量部署模式）'
+                              : dep.error || '未知状态'}
                         </p>
                       </div>
                     </div>
                     <span className={`text-xs font-medium ${
-                      dep.status === 'up' ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'
+                      dep.status === 'up'
+                        ? 'text-[var(--color-success)]'
+                        : dep.status === 'disabled'
+                          ? 'text-[var(--text-tertiary)]'
+                          : 'text-[var(--color-error)]'
                     }`}>
-                      {dep.status === 'up' ? 'UP' : 'DOWN'}
+                      {dep.status === 'up' ? 'UP' : dep.status === 'disabled' ? 'OFF' : 'DOWN'}
                     </span>
                   </div>
                   {key === 'ollama' && dep.status === 'up' && 'models' in dep && Array.isArray((dep as { models?: string[] }).models) && (

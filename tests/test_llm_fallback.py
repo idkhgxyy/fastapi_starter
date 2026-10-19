@@ -46,8 +46,10 @@ def _info(client):
 @pytest.fixture
 def _restore_mock():
     old = settings.LLM_MOCK
+    old_ollama = settings.OLLAMA_ENABLED
     yield
     settings.LLM_MOCK = old
+    settings.OLLAMA_ENABLED = old_ollama
 
 
 class TestBuildFallbackInfo:
@@ -55,8 +57,15 @@ class TestBuildFallbackInfo:
         settings.LLM_MOCK = True
         assert llm_service._build_fallback_info() is None
 
+    def test_returns_none_when_ollama_disabled(self, _restore_mock):
+        # 轻量部署模式：不部署 Ollama，降级链关闭
+        settings.LLM_MOCK = False
+        settings.OLLAMA_ENABLED = False
+        assert llm_service._build_fallback_info() is None
+
     def test_returns_ollama_info(self, db_session, _restore_mock):
         settings.LLM_MOCK = False
+        settings.OLLAMA_ENABLED = True
         info = llm_service._build_fallback_info()
         assert info is not None
         assert info.model_name == settings.OLLAMA_FALLBACK_MODEL
