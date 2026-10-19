@@ -226,7 +226,18 @@ for _dir in _static_candidates:
         break
 
 if _static_dir:
-    app.mount("/", StaticFiles(directory=_static_dir, html=True), name="static")
+    class SPAStaticFiles(StaticFiles):
+        """SPA 路由回退：/chat、/settings 等前端路径在磁盘上不存在，
+        静态服务 404 时统一回退到 index.html，交给前端路由处理。
+        API 路由注册在挂载之前，不受此回退影响。"""
+
+        async def get_response(self, path: str, scope):
+            response = await super().get_response(path, scope)
+            if response.status_code == 404:
+                return await super().get_response("index.html", scope)
+            return response
+
+    app.mount("/", SPAStaticFiles(directory=_static_dir, html=True), name="static")
 else:
     # 无前端构建产物时，提供 JSON 欢迎信息
     @app.get("/", summary="根目录欢迎信息", tags=["Root"])
