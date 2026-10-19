@@ -30,6 +30,8 @@ class Document(Base):
         String(255), nullable=True, index=True
     )
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 闲时批量任务生成的摘要（NULL 表示尚未生成，由 Celery beat 每晚扫描补齐）
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )

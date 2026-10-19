@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     SEMANTIC_CACHE_ENABLED: bool = True
     SEMANTIC_CACHE_THRESHOLD: float = 0.92  # 余弦相似度阈值，达到即命中
 
+    # 闲时批量任务（Celery beat 每天 22:30 北京时间触发，落在百炼闲时窗口）
+    SUMMARIZE_MAX_DOCS_PER_RUN: int = 5  # 每轮最多摘要的文档数
+    SUMMARY_MAX_INPUT_CHARS: int = 4000  # 送入 LLM 的文档内容截断长度
+
     @model_validator(mode="after")
     def _auto_enable_mock(self) -> "Settings":
         """LLM_API_KEY 为空且未显式配置 LLM_MOCK 时自动启用 Mock 模式，实现开箱即用。

@@ -72,7 +72,7 @@ services:
     platform: linux/amd64
     build: .
     container_name: fastapi-starter-worker
-    command: celery -A app.worker.celery_app worker --loglevel=info
+    command: celery -A app.worker.celery_app worker --beat --loglevel=info
     volumes:
       - .:/app
     environment:
