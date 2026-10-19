@@ -28,8 +28,8 @@ logs-worker: ## 查看 Worker 实时日志
 seed: ## 灌入 demo 数据（demo@example.com / demo123456）
 	docker compose exec api python scripts/seed_demo_data.py
 
-test: ## 运行 pytest 测试
-	docker compose exec api pytest tests/ -v
+test: ## 运行 pytest 测试（强制内存 sqlite，绝不动真实库）
+	docker compose exec -e DATABASE_URL='sqlite:///:memory:' api pytest tests/ -v
 
 shell: ## 进入 API 容器 shell
 	docker compose exec api bash

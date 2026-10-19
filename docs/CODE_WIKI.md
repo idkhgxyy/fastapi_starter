@@ -683,8 +683,16 @@ docker compose exec api python scripts/seed_demo_data.py
 # 运行全部单元测试（默认使用 SQLite 内存数据库）
 python3 -m pytest -q
 
-# 使用 PostgreSQL 运行集成测试
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_db python3 -m pytest -q
+# 在容器里跑：必须显式指定内存 sqlite。
+# 容器环境变量里的 DATABASE_URL 指向真实 Postgres，而 conftest 在测试结束时会
+# drop_all —— 曾因此清空过一次真实库。conftest 现在默认拒绝这种组合。
+docker compose exec -e DATABASE_URL='sqlite:///:memory:' api pytest tests/ -q
+# 等价于 make test
+
+# 确实要对着一次性 PostgreSQL 跑集成测试（例如 CI 的服务容器），需显式放行：
+ALLOW_DESTRUCTIVE_DB_TESTS=1 \
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_db \
+  python3 -m pytest -q
 
 # 带覆盖率报告
 python3 -m pytest --cov=app --cov-report=term-missing

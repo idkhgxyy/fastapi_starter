@@ -13,11 +13,21 @@ from app.services.pricing_service import (
 
 
 @pytest.fixture(autouse=True)
-def _clear_price_cache():
-    """每个测试前后清空内存价格缓存，避免串扰"""
+def _clear_price_cache(db_session):
+    """每个测试前后清空内存价格缓存与定价表，避免串扰。
+
+    清表是必须的：app 启动时会用 app 自己的 SessionLocal 种子化定价表。
+    sqlite 内存库下那份种子落在 app 的另一份空库里、测试看不见；PostgreSQL 下
+    app 与测试共用同一个真实库，前面模块触发过 startup 后表里就已有数据，
+    `seed_default_pricings` 的返回值不再是"全部条数"（CI 里正是这么挂的）。
+    teardown 再种回去，不影响后续模块。
+    """
     invalidate_cache()
+    db_session.query(ModelPricing).delete()
+    db_session.commit()
     yield
     invalidate_cache()
+    seed_default_pricings(db_session)
 
 
 class TestSeedDefaultPricings:
@@ -31,9 +41,7 @@ class TestSeedDefaultPricings:
         seed_default_pricings(db_session)
         inserted_again = seed_default_pricings(db_session)
         assert inserted_again == 0
-        assert (
-            db_session.query(ModelPricing).count() == len(DEFAULT_PRICINGS)
-        )
+        assert db_session.query(ModelPricing).count() == len(DEFAULT_PRICINGS)
 
 
 class TestGetModelPrices:
@@ -70,9 +78,7 @@ class TestGetModelPrices:
 
     def test_cache_invalidated_on_demand(self, db_session):
         db_session.add(
-            ModelPricing(
-                model_name="cached-model", input_price_per_1m=1.0, output_price_per_1m=1.0
-            )
+            ModelPricing(model_name="cached-model", input_price_per_1m=1.0, output_price_per_1m=1.0)
         )
         db_session.commit()
         assert get_model_prices(db_session, "cached-model") == (1.0, 1.0)
@@ -96,7 +102,9 @@ class TestEstimateCostCny:
         )
         db_session.commit()
         # 1M 输入 + 0.5M 输出 = 4 + 6 = 10 元
-        assert estimate_cost_cny(db_session, "priced-model", 1_000_000, 500_000) == pytest.approx(10.0)
+        assert estimate_cost_cny(db_session, "priced-model", 1_000_000, 500_000) == pytest.approx(
+            10.0
+        )
 
 
 def settings_in_input():

@@ -6,6 +6,7 @@ import pytest
 
 from app.core.config import settings
 from app.models.llm_call_log import LLMCallLog
+from app.models.model_pricing import ModelPricing
 from app.models.user import User
 from app.services.cost_guard import (
     BudgetStatus,
@@ -13,6 +14,26 @@ from app.services.cost_guard import (
     estimate_cost_cny,
     get_spent_cny,
 )
+from app.services.pricing_service import invalidate_cache, seed_default_pricings
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_pricing(db_session):
+    """固定"定价表为空 → 回退全局单价"这个前提，测完再种子化回去。
+
+    本模块的成本断言都是按全局兜底单价（3/9 元每百万 token）手算的。
+    但 app 启动时会用 app 自己的 SessionLocal 种子化定价表：
+      - sqlite 内存库：app 引擎另有一份空库，种子数据落不到测试库，前提恰好成立；
+      - PostgreSQL：app 与测试共用同一个真实库，前面模块触发过 startup 后表里
+        已有 DB 单价，断言就会算出别的数（CI 里正是这么挂的）。
+    所以这里显式清空，让前提在两种后端上都成立；teardown 再种回去，不污染后续模块。
+    """
+    invalidate_cache()
+    db_session.query(ModelPricing).delete()
+    db_session.commit()
+    yield
+    invalidate_cache()
+    seed_default_pricings(db_session)
 
 
 @pytest.fixture
@@ -58,23 +79,27 @@ class TestEstimateCostCny:
     def test_known_model_price(self, db_session):
         # deepseek-v4-flash-0731: 输入 3 元/M，输出 9 元/M（未种子化时回退全局配置，数值相同）
         # 1000 prompt + 1000 completion = (3 + 9) / 1000 = 0.012 元
-        assert estimate_cost_cny(
-            db_session, "deepseek-v4-flash-0731", 1000, 1000
-        ) == pytest.approx(0.012)
+        assert estimate_cost_cny(db_session, "deepseek-v4-flash-0731", 1000, 1000) == pytest.approx(
+            0.012
+        )
 
     def test_unknown_model_falls_back_to_settings(self, db_session):
         # 未收录模型使用 settings 全局单价
         p = settings.LLM_INPUT_PRICE_PER_1M
         o = settings.LLM_OUTPUT_PRICE_PER_1M
         expected = (1000 * p + 2000 * o) / 1_000_000
-        assert estimate_cost_cny(db_session, "some-unknown-model", 1000, 2000) == pytest.approx(expected)
+        assert estimate_cost_cny(db_session, "some-unknown-model", 1000, 2000) == pytest.approx(
+            expected
+        )
 
 
 class TestGetSpentCny:
     def test_sums_success_only(self, db_session):
         _add_log(db_session, model_name="deepseek-v4-flash-0731", p=1_000_000, c=0)
         _add_log(db_session, model_name="deepseek-v4-flash-0731", p=0, c=1_000_000)
-        _add_log(db_session, model_name="deepseek-v4-flash-0731", p=999_999, c=999_999, status="failed")
+        _add_log(
+            db_session, model_name="deepseek-v4-flash-0731", p=999_999, c=999_999, status="failed"
+        )
         # 失败调用不计费：3 + 9 = 12 元
         assert get_spent_cny(db_session, user_id=1) == pytest.approx(12.0)
 
@@ -200,7 +225,11 @@ class TestBudgetAPI:
         settings.LLM_BUDGET_CNY = 45.0
         client.post(
             "/api/v1/users/",
-            json={"username": "api_budgeter", "email": "api_budgeter@test.dev", "password": "testpassword"},
+            json={
+                "username": "api_budgeter",
+                "email": "api_budgeter@test.dev",
+                "password": "testpassword",
+            },
         )
         login = client.post(
             "/api/v1/auth/login",
@@ -216,17 +245,13 @@ class TestBudgetAPI:
         assert data["budget_cny"] == pytest.approx(45.0)
 
         # 设置个人预算
-        resp = client.put(
-            "/api/v1/users/me/budget", json={"budget_cny": 10.0}, headers=headers
-        )
+        resp = client.put("/api/v1/users/me/budget", json={"budget_cny": 10.0}, headers=headers)
         assert resp.status_code == 200
         data = resp.json()
         assert data["has_personal_budget"] is True
         assert data["budget_cny"] == pytest.approx(10.0)
 
         # 置 null 回退全局
-        resp = client.put(
-            "/api/v1/users/me/budget", json={"budget_cny": None}, headers=headers
-        )
+        resp = client.put("/api/v1/users/me/budget", json={"budget_cny": None}, headers=headers)
         assert resp.json()["has_personal_budget"] is False
         assert resp.json()["budget_cny"] == pytest.approx(45.0)

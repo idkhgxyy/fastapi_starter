@@ -68,6 +68,9 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_db
           REDIS_URL: redis://localhost:6379/0
           SECRET_KEY: ci_test_secret_key_not_used_in_production
+          # conftest 默认拒绝在 Postgres 上跑测试（结束时会 drop_all）。
+          # 这里的 postgres 是本次 job 专属的一次性服务容器，显式放行。
+          ALLOW_DESTRUCTIVE_DB_TESTS: "1"
         run: |
           python -m pytest tests/ -q --cov=app --cov-report=term-missing --cov-report=xml
 
