@@ -1,12 +1,20 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_superuser, get_current_user, get_db
 from app.core.config import settings
 from app.models.user import User
-from app.schemas.user import PasswordUpdate, UserCreate, UserLLMConfigUpdate, UserOut
+from app.schemas.user import (
+    PasswordUpdate,
+    UserBudgetOut,
+    UserBudgetUpdate,
+    UserCreate,
+    UserLLMConfigUpdate,
+    UserOut,
+)
+from app.services.cost_guard import check_budget
 from app.services.user_service import UserService
 from app.utils.rate_limit import RateLimiter
 
@@ -56,6 +64,41 @@ async def change_password(
     current_user: User = Depends(get_current_user),
 ):
     return UserService.change_password(db, current_user.id, password_in)
+
+
+@router.get("/me/budget", response_model=UserBudgetOut, summary="查看当前用户的成本预算与用量")
+async def get_my_budget(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """返回生效预算（个人优先，回退全局）与当前周期内花费/剩余"""
+    status = check_budget(db, current_user.id)
+    return UserBudgetOut(
+        budget_cny=status.budget_cny,
+        budget_period=status.period,
+        has_personal_budget=current_user.budget_cny is not None,
+        spent_cny=status.spent_cny,
+        remaining_cny=status.remaining_cny,
+        period_start=status.period_start.isoformat() if status.period_start else None,
+    )
+
+
+@router.put("/me/budget", response_model=UserBudgetOut, summary="设置当前用户的成本预算")
+async def update_my_budget(
+    budget_in: UserBudgetUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """设置个人预算（元/周期）。budget_cny 置 null 回退全局默认，<=0 关闭熔断"""
+    if budget_in.budget_period not in ("monthly", None):
+        raise HTTPException(status_code=400, detail="budget_period 目前仅支持 monthly")
+
+    current_user.budget_cny = budget_in.budget_cny
+    if budget_in.budget_period:
+        current_user.budget_period = budget_in.budget_period
+    db.commit()
+    db.refresh(current_user)
+    return await get_my_budget(db=db, current_user=current_user)
 
 
 @router.get("/{user_id}", response_model=UserOut, summary="获取指定用户详情")

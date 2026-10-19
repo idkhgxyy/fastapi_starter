@@ -53,3 +53,19 @@ class UserLLMConfigUpdate(BaseModel):
 class PasswordUpdate(BaseModel):
     old_password: str = Field(..., min_length=6, description="旧密码")
     new_password: str = Field(..., min_length=6, description="新密码")
+
+
+class UserBudgetUpdate(BaseModel):
+    """用户更新个人成本预算；budget_cny 为 null 表示回退全局默认，<=0 表示关闭熔断"""
+
+    budget_cny: Optional[float] = Field(None, description="个人预算（元/周期）")
+    budget_period: Optional[str] = Field("monthly", description="预算周期，目前仅支持 monthly")
+
+
+class UserBudgetOut(BaseModel):
+    budget_cny: float = Field(..., description="生效预算（元/周期，含全局回退）")
+    budget_period: str = Field("monthly", description="预算周期")
+    has_personal_budget: bool = Field(..., description="是否设置了个人预算")
+    spent_cny: float = Field(..., description="当前周期已花费（元）")
+    remaining_cny: float = Field(..., description="当前周期剩余（元）")
+    period_start: Optional[str] = Field(None, description="当前周期起点 (ISO)")

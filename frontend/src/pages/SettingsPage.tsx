@@ -1,8 +1,14 @@
 import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { getCurrentUser, updateLLMConfig, changePassword } from '@/services/userService'
-import type { HealthStatus } from '@/types'
+import {
+  getCurrentUser,
+  updateLLMConfig,
+  changePassword,
+  getMyBudget,
+  updateMyBudget,
+} from '@/services/userService'
+import type { HealthStatus, UserBudget } from '@/types'
 import api from '@/services/api'
 
 const PROVIDERS = [
@@ -32,9 +38,20 @@ export default function SettingsPage() {
 
   const [health, setHealth] = useState<HealthStatus | null>(null)
 
+  const [budget, setBudget] = useState<UserBudget | null>(null)
+  const [budgetInput, setBudgetInput] = useState('')
+  const [budgetSaving, setBudgetSaving] = useState(false)
+  const [budgetMessage, setBudgetMessage] = useState('')
+
   useEffect(() => {
     getCurrentUser().then((u) => setUser(u)).catch(() => {})
     api.get<HealthStatus>('/health/').then((r) => setHealth(r.data)).catch(() => {})
+    getMyBudget()
+      .then((b) => {
+        setBudget(b)
+        setBudgetInput(b.has_personal_budget ? String(b.budget_cny) : '')
+      })
+      .catch(() => {})
   }, [setUser])
 
   useEffect(() => {
@@ -86,6 +103,29 @@ export default function SettingsPage() {
       setLlmMessage('清除失败，请重试')
     } finally {
       setLlmSaving(false)
+    }
+  }
+
+  async function handleBudget(e: FormEvent) {
+    e.preventDefault()
+    setBudgetMessage('')
+    setBudgetSaving(true)
+    try {
+      const trimmed = budgetInput.trim()
+      // 留空 = 回退全局默认；填 0 或负数 = 关闭熔断
+      const value = trimmed === '' ? null : Number(trimmed)
+      if (value !== null && (Number.isNaN(value) || !Number.isFinite(value))) {
+        setBudgetMessage('请输入有效数字')
+        return
+      }
+      const updated = await updateMyBudget({ budget_cny: value })
+      setBudget(updated)
+      setBudgetInput(updated.has_personal_budget ? String(updated.budget_cny) : '')
+      setBudgetMessage('预算已保存')
+    } catch {
+      setBudgetMessage('保存失败，请重试')
+    } finally {
+      setBudgetSaving(false)
     }
   }
 
@@ -209,6 +249,55 @@ export default function SettingsPage() {
                 </button>
               )}
             </div>
+          </form>
+        </section>
+
+        <hr className="border-[var(--border-primary)]" />
+
+        <section>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1">成本预算</h2>
+          <p className="text-xs text-[var(--text-tertiary)] mb-4">
+            每月对 LLM 使用的花费上限（BYOK 模式下保护你自己的 Key）。达到上限后拒绝调用，月初自动重置
+          </p>
+
+          {budget && (
+            <div className="flex items-center gap-4 mb-4 text-sm">
+              <span className="text-[var(--text-secondary)]">
+                本月已花费 <span className="font-mono font-semibold text-[var(--text-primary)]">¥{budget.spent_cny.toFixed(2)}</span>
+              </span>
+              <span className="text-[var(--text-secondary)]">
+                剩余 <span className="font-mono font-semibold text-[var(--text-primary)]">¥{budget.remaining_cny.toFixed(2)}</span>
+              </span>
+              <span className="text-xs text-[var(--text-tertiary)]">
+                {budget.has_personal_budget ? '个人预算' : `全局默认 ¥${budget.budget_cny}`}
+              </span>
+            </div>
+          )}
+
+          <form onSubmit={handleBudget} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+                个人预算（元/月）
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={budgetInput}
+                onChange={(e) => setBudgetInput(e.target.value)}
+                placeholder="留空使用全局默认；0 或负数关闭熔断"
+                className="w-full px-3 py-2 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
+              />
+            </div>
+
+            {budgetMessage && (
+              <p className={`text-sm ${budgetMessage.includes('成功') ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}>
+                {budgetMessage}
+              </p>
+            )}
+
+            <button type="submit" disabled={budgetSaving} className="px-4 py-2 rounded-lg bg-brand-500 text-white text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors">
+              {budgetSaving ? '保存中...' : '保存预算'}
+            </button>
           </form>
         </section>
 

@@ -113,6 +113,20 @@ export interface LLMCallLog {
   created_at: string
 }
 
+export interface UserBudget {
+  budget_cny: number
+  budget_period: string
+  has_personal_budget: boolean
+  spent_cny: number
+  remaining_cny: number
+  period_start: string | null
+}
+
+export interface UserBudgetUpdate {
+  budget_cny: number | null
+  budget_period?: string
+}
+
 export interface HealthStatus {
   status: 'ok' | 'degraded'
   version: string

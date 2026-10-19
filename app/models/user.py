@@ -31,6 +31,12 @@ class User(Base):
     llm_model_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     llm_api_key_encrypted: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
+    # 用户级成本预算（BYOK 场景下保护用户自己的钱包）
+    # budget_cny 为 NULL 时回退到全局默认 LLM_BUDGET_CNY；<=0 表示关闭熔断
+    budget_cny: Mapped[Optional[float]] = mapped_column(nullable=True)
+    # 目前仅支持 'monthly'（自然月重置），预留扩展
+    budget_period: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default="monthly")
+
     @property
     def has_custom_llm_key(self) -> bool:
         return bool(self.llm_api_key_encrypted)

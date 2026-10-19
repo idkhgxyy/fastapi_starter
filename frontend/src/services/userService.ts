@@ -1,5 +1,5 @@
 import api from './api'
-import type { User, LLMConfig } from '@/types'
+import type { User, LLMConfig, UserBudget, UserBudgetUpdate } from '@/types'
 
 export async function getCurrentUser(): Promise<User> {
   const response = await api.get<User>('/users/me')
@@ -21,4 +21,14 @@ export async function changePassword(currentPassword: string, newPassword: strin
     old_password: currentPassword,
     new_password: newPassword,
   })
+}
+
+export async function getMyBudget(): Promise<UserBudget> {
+  const response = await api.get<UserBudget>('/users/me/budget')
+  return response.data
+}
+
+export async function updateMyBudget(update: UserBudgetUpdate): Promise<UserBudget> {
+  const response = await api.put<UserBudget>('/users/me/budget', update)
+  return response.data
 }
