@@ -89,9 +89,7 @@ def create_llm_call_log(
             latency_ms=latency_ms,
             estimated_cost_usd=estimate_cost_usd(prompt_tokens, completion_tokens),
             # 记账时点按定价中心折算人民币成本
-            estimated_cost_cny=estimate_cost_cny(
-                db, final_model, prompt_tokens, completion_tokens
-            ),
+            estimated_cost_cny=estimate_cost_cny(db, final_model, prompt_tokens, completion_tokens),
             status=status,
             error_message=error_message,
         )

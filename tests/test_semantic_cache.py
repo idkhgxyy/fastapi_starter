@@ -59,8 +59,14 @@ class TestStoreAndLookup:
     def test_store_then_hit(self, db_session):
         asyncio.run(
             store_semantic_cache(
-                db_session, 1, "问题A", "回答A", "deepseek-v4.1-flash",
-                1000, 500, 0.006,
+                db_session,
+                1,
+                "问题A",
+                "回答A",
+                "deepseek-v4.1-flash",
+                1000,
+                500,
+                0.006,
             )
         )
         hit = asyncio.run(lookup_semantic_cache(db_session, 1, "问题A"))
@@ -71,19 +77,13 @@ class TestStoreAndLookup:
         assert entry.hit_count == 1
 
     def test_orthogonal_question_misses(self, db_session):
-        asyncio.run(
-            store_semantic_cache(
-                db_session, 1, "问题A", "回答A", "m", 100, 50, 0.001
-            )
-        )
+        asyncio.run(store_semantic_cache(db_session, 1, "问题A", "回答A", "m", 100, 50, 0.001))
         hit = asyncio.run(lookup_semantic_cache(db_session, 1, "问题B"))
         assert hit is None
 
     def test_isolated_per_user(self, db_session):
         asyncio.run(
-            store_semantic_cache(
-                db_session, 1, "问题A", "用户1的回答", "m", 100, 50, 0.001
-            )
+            store_semantic_cache(db_session, 1, "问题A", "用户1的回答", "m", 100, 50, 0.001)
         )
         # 用户 2 查同样的问题 → 命中不了用户 1 的条目（缓存表为空 → None）
         hit = asyncio.run(lookup_semantic_cache(db_session, 2, "问题A"))
@@ -91,11 +91,7 @@ class TestStoreAndLookup:
 
     def test_disabled_cache_skips(self, db_session):
         settings.SEMANTIC_CACHE_ENABLED = False
-        asyncio.run(
-            store_semantic_cache(
-                db_session, 1, "问题A", "回答A", "m", 100, 50, 0.001
-            )
-        )
+        asyncio.run(store_semantic_cache(db_session, 1, "问题A", "回答A", "m", 100, 50, 0.001))
         assert db_session.query(QACacheEntry).count() == 0
         hit = asyncio.run(lookup_semantic_cache(db_session, 1, "问题A"))
         assert hit is None
@@ -103,11 +99,7 @@ class TestStoreAndLookup:
     def test_threshold_blocks_below_threshold(self, db_session):
         # 阈值高于可能达到的最大相似度 1.0 → 即使完全相同的问题也判为未命中
         settings.SEMANTIC_CACHE_THRESHOLD = 1.5
-        asyncio.run(
-            store_semantic_cache(
-                db_session, 1, "问题A", "回答A", "m", 100, 50, 0.001
-            )
-        )
+        asyncio.run(store_semantic_cache(db_session, 1, "问题A", "回答A", "m", 100, 50, 0.001))
         hit = asyncio.run(lookup_semantic_cache(db_session, 1, "问题A"))
         assert hit is None
 
@@ -116,9 +108,15 @@ class TestCacheStats:
     def test_counts_hits_and_savings(self, db_session):
         db_session.add(
             QACacheEntry(
-                user_id=1, question="q", answer="a", embedding=_vec(0),
-                model_name="m", prompt_tokens=1000, completion_tokens=500,
-                original_cost_cny=0.006, hit_count=3,
+                user_id=1,
+                question="q",
+                answer="a",
+                embedding=_vec(0),
+                model_name="m",
+                prompt_tokens=1000,
+                completion_tokens=500,
+                original_cost_cny=0.006,
+                hit_count=3,
             )
         )
         db_session.commit()

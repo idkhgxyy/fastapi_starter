@@ -58,23 +58,19 @@ class TestSummarizeDocument:
                 return response
 
         info = SimpleNamespace(
-            client=SimpleNamespace(api_key="fake-key", chat=SimpleNamespace(completions=FakeCompletions())),
+            client=SimpleNamespace(
+                api_key="fake-key", chat=SimpleNamespace(completions=FakeCompletions())
+            ),
             model_name="fake-model",
         )
-        monkeypatch.setattr(
-            "app.services.llm_service.get_llm_client", lambda user: info
-        )
+        monkeypatch.setattr("app.services.llm_service.get_llm_client", lambda user: info)
 
         summary = asyncio_run(_summarize_document(db_session, ready_doc))
         assert "FastAPI" in summary
 
     def test_summarize_no_llm_raises(self, db_session, ready_doc, monkeypatch):
-        no_key_info = SimpleNamespace(
-            client=SimpleNamespace(api_key=""), model_name="x"
-        )
-        monkeypatch.setattr(
-            "app.services.llm_service.get_llm_client", lambda user: no_key_info
-        )
+        no_key_info = SimpleNamespace(client=SimpleNamespace(api_key=""), model_name="x")
+        monkeypatch.setattr("app.services.llm_service.get_llm_client", lambda user: no_key_info)
         # 无 Key 且无本地降级（mock 模式）时应抛错
         import app.services.llm_service as llm_service
 

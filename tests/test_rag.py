@@ -359,8 +359,6 @@ def test_rag_query_stream_no_chunks(client, monkeypatch, db_session):
 
 def test_rag_search_returns_chunks(client, db_session, monkeypatch):
     """纯检索接口：返回相关片段且不调用 LLM"""
-    import asyncio
-
     # 注册用户并拿到 id
     client.post(
         "/api/v1/users/",
@@ -371,10 +369,7 @@ def test_rag_search_returns_chunks(client, db_session, monkeypatch):
         data={"username": "searcher@test.dev", "password": "testpassword"},
     )
     headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
-    user_id = login_resp_user_id = None
 
-    from app.services.user_service import UserService  # noqa: F401
-    from app.models.user import User
     # 通过 API 拿当前用户 id
     me = client.get("/api/v1/users/me", headers=headers).json()
     user_id = me["id"]
@@ -395,9 +390,7 @@ def test_rag_search_returns_chunks(client, db_session, monkeypatch):
         # 简单确定性向量：非空文本返回固定向量
         return [[1.0] * 1024 for _ in texts]
 
-    monkeypatch.setattr(
-        "app.services.rag_service.RAGService.get_embeddings", fake_embeddings
-    )
+    monkeypatch.setattr("app.services.rag_service.RAGService.get_embeddings", fake_embeddings)
     db_session.add(
         DocumentChunk(
             document_id=doc.id,
@@ -408,9 +401,7 @@ def test_rag_search_returns_chunks(client, db_session, monkeypatch):
     )
     db_session.commit()
 
-    resp = client.get(
-        "/api/v1/rag/search", params={"query": "向量检索库"}, headers=headers
-    )
+    resp = client.get("/api/v1/rag/search", params={"query": "向量检索库"}, headers=headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["query"] == "向量检索库"
@@ -454,9 +445,7 @@ def test_rag_query_budget_blocked(client, db_session):
     )
     db_session.commit()
 
-    resp = client.post(
-        "/api/v1/rag/query", json={"query": "测试"}, headers=headers
-    )
+    resp = client.post("/api/v1/rag/query", json={"query": "测试"}, headers=headers)
     assert resp.status_code == 402
     assert "成本熔断" in str(resp.json())
     settings.LLM_BUDGET_CNY = old_budget

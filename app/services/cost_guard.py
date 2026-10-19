@@ -50,9 +50,7 @@ def _period_start(period: str) -> Optional[datetime]:
     return None
 
 
-def get_spent_cny(
-    db: Session, user_id: Optional[int], since: Optional[datetime] = None
-) -> float:
+def get_spent_cny(db: Session, user_id: Optional[int], since: Optional[datetime] = None) -> float:
     """从调用日志重算累计花费（元）。
 
     不信任日志中存储的 estimated_cost_usd 字段（旧数据单价为 0），

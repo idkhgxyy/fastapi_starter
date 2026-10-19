@@ -11,7 +11,9 @@ from app.services.cost_guard import BudgetStatus
 
 
 def _make_usage(prompt=100, completion=50):
-    return SimpleNamespace(prompt_tokens=prompt, completion_tokens=completion, total_tokens=prompt + completion)
+    return SimpleNamespace(
+        prompt_tokens=prompt, completion_tokens=completion, total_tokens=prompt + completion
+    )
 
 
 def _make_response(content="本地模型的回答"):

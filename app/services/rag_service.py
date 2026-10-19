@@ -268,7 +268,9 @@ class RAGService:
 
         return [item[0] for item in scored_candidates[:top_k]]
 
-    def _python_fallback_candidates(self, query_vector, owner_id: int, recall_k: int) -> List[DocumentChunk]:
+    def _python_fallback_candidates(
+        self, query_vector, owner_id: int, recall_k: int
+    ) -> List[DocumentChunk]:
         """sqlite / 无 pgvector 环境的检索回退：逐条计算余弦相似度取最优。"""
         from app.services.semantic_cache import _cosine_similarity, _parse_embedding
 

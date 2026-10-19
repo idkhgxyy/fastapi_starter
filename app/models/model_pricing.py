@@ -22,6 +22,7 @@ class ModelPricing(Base):
     currency: Mapped[str] = mapped_column(String(10), default="CNY")
     note: Mapped[str] = mapped_column(String(255), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc),
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )

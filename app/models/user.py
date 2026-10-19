@@ -35,7 +35,9 @@ class User(Base):
     # budget_cny 为 NULL 时回退到全局默认 LLM_BUDGET_CNY；<=0 表示关闭熔断
     budget_cny: Mapped[Optional[float]] = mapped_column(nullable=True)
     # 目前仅支持 'monthly'（自然月重置），预留扩展
-    budget_period: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default="monthly")
+    budget_period: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True, default="monthly"
+    )
 
     @property
     def has_custom_llm_key(self) -> bool:

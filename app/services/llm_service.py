@@ -301,7 +301,9 @@ async def _llm_completion_with_retry(llm_client, **kwargs):
             return await llm_client.chat.completions.create(**kwargs)
 
 
-async def _get_knowledge_context(db: Session, current_user_id: int, message: str) -> Union[str, None]:
+async def _get_knowledge_context(
+    db: Session, current_user_id: int, message: str
+) -> Union[str, None]:
     """
     检索用户知识库中与消息相关的片段，返回用于注入 system prompt 的上下文。
     用户没有已就绪文档、无相关命中或检索出错时返回 None（不影响正常对话）。
@@ -343,9 +345,7 @@ async def _load_history_messages(current_user_id: int, session_id: str) -> list:
         return []
 
 
-async def _save_history_messages(
-    current_user_id: int, session_id: str, messages: list
-) -> None:
+async def _save_history_messages(current_user_id: int, session_id: str, messages: list) -> None:
     """把本轮 user/assistant 消息追加到 Redis 会话历史"""
     if not session_id:
         return
@@ -693,7 +693,11 @@ async def generate_chat_reply_stream(
             yield f"data: {data}\n\n"
             return
         candidates.append(
-            (fallback, "ollama", f"（提示：已达到云端预算，本次由本地模型 {fallback.model_name} 回答）")
+            (
+                fallback,
+                "ollama",
+                f"（提示：已达到云端预算，本次由本地模型 {fallback.model_name} 回答）",
+            )
         )
     else:
         info = get_llm_client(user)
@@ -704,14 +708,22 @@ async def generate_chat_reply_stream(
                 yield 'data: {"error": "API Key 未配置"}\n\n'
                 return
             candidates.append(
-                (fallback, "ollama", f"（提示：云端 Key 未配置，本次由本地模型 {fallback.model_name} 回答）")
+                (
+                    fallback,
+                    "ollama",
+                    f"（提示：云端 Key 未配置，本次由本地模型 {fallback.model_name} 回答）",
+                )
             )
         else:
             candidates.append((info, provider, None))
             fallback = _build_fallback_info()
             if fallback is not None:
                 candidates.append(
-                    (fallback, "ollama", f"（提示：云端服务暂不可用，本次由本地模型 {fallback.model_name} 回答）")
+                    (
+                        fallback,
+                        "ollama",
+                        f"（提示：云端服务暂不可用，本次由本地模型 {fallback.model_name} 回答）",
+                    )
                 )
 
     started_at = start_timer()
@@ -831,9 +843,7 @@ async def generate_chat_reply_stream(
             )
         # 流式回答也可缓存（流式链路无工具调用）
         if db and full_content and settings.SEMANTIC_CACHE_ENABLED:
-            original_cost = estimate_cost_cny(
-                db, info.model_name, prompt_tokens, completion_tokens
-            )
+            original_cost = estimate_cost_cny(db, info.model_name, prompt_tokens, completion_tokens)
             await store_semantic_cache(
                 db,
                 current_user_id,

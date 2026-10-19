@@ -1,10 +1,16 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.0
+    # 必须与 requirements-dev.txt 里 pin 的 ruff 版本一致（CI 装的就是那个版本），
+    # 否则本地钩子格式化出来的结果和 CI 的检查结果会互相打架。
+    rev: v0.17.1
     hooks:
       - id: ruff
         args: [--fix]
+        # 检查范围与 CI 的 `ruff check app/ tests/` 严格对齐：
+        # scripts/ 与 alembic/ 目前两边都不管，别让钩子拦 CI 不在乎的东西。
+        files: ^(app|tests)/
       - id: ruff-format
+        files: ^(app|tests)/
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

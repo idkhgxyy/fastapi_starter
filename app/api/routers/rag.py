@@ -14,8 +14,8 @@ from app.services.llm_observability_service import (
     start_timer,
 )
 from app.services.llm_service import get_llm_client
-from app.services.rag_service import RAGService, append_session_message, load_session_history
 from app.services.pricing_service import estimate_cost_cny
+from app.services.rag_service import RAGService, append_session_message, load_session_history
 from app.services.semantic_cache import lookup_semantic_cache, store_semantic_cache
 from app.utils.file_parser import get_supported_extensions, parse_file
 from app.worker.tasks import process_document_task
@@ -136,7 +136,8 @@ async def delete_document(
 
 @router.get(
     "/search",
-    summary="知识库纯检索（只返回相关片段，不调用 LLM、零 LLM 成本）", tags=["RAG"],
+    summary="知识库纯检索（只返回相关片段，不调用 LLM、零 LLM 成本）",
+    tags=["RAG"],
 )
 async def search_knowledge_base(
     query: str = Query(..., min_length=1, description="检索关键词或句子"),
@@ -151,9 +152,7 @@ async def search_knowledge_base(
     )
     return {
         "query": query,
-        "results": [
-            {"document_id": c.document_id, "content": c.content} for c in chunks
-        ],
+        "results": [{"document_id": c.document_id, "content": c.content} for c in chunks],
     }
 
 

@@ -22,12 +22,19 @@ _CACHE_TTL_SECONDS = 60
 
 # 内置种子价格（2026-10 查自百炼官方价格页，忙时价）
 DEFAULT_PRICINGS = [
-    {"model_name": "deepseek-v4.1-flash", "input": 2.0, "output": 8.0,
-     "note": "百炼官方价，忙时；闲时 1/4"},
-    {"model_name": "deepseek-v4-flash-0731", "input": 3.0, "output": 9.0,
-     "note": "百炼官方价，忙时；闲时 1.5/4.5"},
-    {"model_name": "deepseek-v3.2", "input": 2.0, "output": 3.0,
-     "note": "百炼官方价"},
+    {
+        "model_name": "deepseek-v4.1-flash",
+        "input": 2.0,
+        "output": 8.0,
+        "note": "百炼官方价，忙时；闲时 1/4",
+    },
+    {
+        "model_name": "deepseek-v4-flash-0731",
+        "input": 3.0,
+        "output": 9.0,
+        "note": "百炼官方价，忙时；闲时 1.5/4.5",
+    },
+    {"model_name": "deepseek-v3.2", "input": 2.0, "output": 3.0, "note": "百炼官方价"},
 ]
 
 
@@ -35,9 +42,7 @@ def seed_default_pricings(db: Session) -> int:
     """幂等写入内置种子价格，返回新插入的条数。应用启动时调用。"""
     inserted = 0
     try:
-        existing = {
-            name for (name,) in db.query(ModelPricing.model_name).all()
-        }
+        existing = {name for (name,) in db.query(ModelPricing.model_name).all()}
         for item in DEFAULT_PRICINGS:
             if item["model_name"] in existing:
                 continue
@@ -71,11 +76,7 @@ def get_model_prices(db: Session, model_name: str) -> Tuple[float, float]:
         return cached[0]
 
     try:
-        row = (
-            db.query(ModelPricing)
-            .filter(ModelPricing.model_name == model_name)
-            .first()
-        )
+        row = db.query(ModelPricing).filter(ModelPricing.model_name == model_name).first()
         if row is not None:
             prices = (row.input_price_per_1m, row.output_price_per_1m)
             _PRICE_CACHE[model_name] = (prices, time.monotonic())
