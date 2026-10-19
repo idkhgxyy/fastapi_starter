@@ -58,7 +58,7 @@ export default function LLMCallLogTable({ logs, loading }: Props) {
                     <td className="px-4 py-3 text-[var(--text-secondary)] text-xs">{log.model_name}</td>
                     <td className="px-4 py-3 text-right text-[var(--text-secondary)] font-mono text-xs">{log.total_tokens}</td>
                     <td className="px-4 py-3 text-right text-[var(--text-secondary)] font-mono text-xs">{(log.latency_ms / 1000).toFixed(1)}s</td>
-                    <td className="px-4 py-3 text-right text-[var(--text-secondary)] font-mono text-xs">${log.estimated_cost_usd.toFixed(4)}</td>
+                    <td className="px-4 py-3 text-right text-[var(--text-secondary)] font-mono text-xs">¥{(log.estimated_cost_cny ?? 0).toFixed(4)}</td>
                     <td className="px-4 py-3 text-center">
                       <span className={`inline-flex items-center gap-1 text-xs font-medium ${
                         log.status === 'success' ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'
@@ -106,7 +106,7 @@ function CallDetailModal({ log, onClose }: { log: LLMCallLog; onClose: () => voi
               ['状态', log.status],
               ['Token', `${log.prompt_tokens} prompt + ${log.completion_tokens} completion = ${log.total_tokens} total`],
               ['耗时', `${(log.latency_ms / 1000).toFixed(2)}s`],
-              ['成本', `$${log.estimated_cost_usd.toFixed(6)}`],
+              ['成本 (CNY)', `¥${(log.estimated_cost_cny ?? 0).toFixed(6)}`],
               ['时间', new Date(log.created_at).toLocaleString('zh-CN')],
             ].map(([label, value]) => (
               <div key={label}>

@@ -23,7 +23,6 @@ from app.models.user import User
 from app.services.cost_guard import (
     budget_reject_message,
     check_budget,
-    get_model_prices,
 )
 from app.services.llm_observability_service import (
     create_llm_call_log,

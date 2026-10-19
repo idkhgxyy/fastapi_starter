@@ -27,6 +27,8 @@ class LLMCallLog(Base):
     total_tokens: Mapped[int] = mapped_column(Integer, default=0)
     latency_ms: Mapped[float] = mapped_column(Float, default=0.0)
     estimated_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    # 记账时点按定价中心折算的人民币成本（历史数据此列可能为 0，用 token 数重算更准）
+    estimated_cost_cny: Mapped[float] = mapped_column(Float, default=0.0)
     status: Mapped[str] = mapped_column(String(20), default="success", index=True)
     error_message: Mapped[str] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

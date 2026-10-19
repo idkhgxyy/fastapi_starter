@@ -64,6 +64,7 @@ export interface LLMStats {
   failed_calls: number
   total_tokens: number
   total_cost_usd: number
+  total_cost_cny: number
   avg_latency_ms: number
   daily_stats: DailyLLMStats[]
   endpoint_stats: EndpointLLMStats[]
@@ -75,6 +76,7 @@ export interface DailyLLMStats {
   calls: number
   tokens: number
   cost_usd: number
+  cost_cny: number
   avg_latency_ms: number
 }
 
@@ -105,6 +107,7 @@ export interface LLMCallLog {
   total_tokens: number
   latency_ms: number
   estimated_cost_usd: number
+  estimated_cost_cny: number
   status: string
   error_message: string | null
   created_at: string

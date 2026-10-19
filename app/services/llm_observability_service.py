@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.logging import get_request_id, logger
 from app.models.llm_call_log import LLMCallLog
+from app.services.pricing_service import estimate_cost_cny
 
 
 def start_timer() -> float:
@@ -70,11 +71,12 @@ def create_llm_call_log(
     provider: Optional[str] = None,
 ) -> None:
     try:
+        final_model = model_name or settings.LLM_MODEL_NAME
         log = LLMCallLog(
             user_id=user_id,
             endpoint=endpoint,
             # 优先记录本次调用实际使用的模型/服务商，未提供时回退全局配置
-            model_name=model_name or settings.LLM_MODEL_NAME,
+            model_name=final_model,
             provider=provider or settings.LLM_PROVIDER,
             request_id=get_request_id(),
             prompt=prompt,
@@ -85,6 +87,10 @@ def create_llm_call_log(
             total_tokens=total_tokens,
             latency_ms=latency_ms,
             estimated_cost_usd=estimate_cost_usd(prompt_tokens, completion_tokens),
+            # 记账时点按定价中心折算人民币成本
+            estimated_cost_cny=estimate_cost_cny(
+                db, final_model, prompt_tokens, completion_tokens
+            ),
             status=status,
             error_message=error_message,
         )
@@ -109,6 +115,7 @@ def get_llm_overview_stats(
     failed_calls = total_calls - successful_calls
     total_tokens = sum(row.total_tokens for row in rows)
     total_cost = round(sum(row.estimated_cost_usd for row in rows), 6)
+    total_cost_cny = round(sum(row.estimated_cost_cny for row in rows), 6)
     avg_latency_ms = (
         round(sum(row.latency_ms for row in rows) / total_calls, 2) if total_calls else 0.0
     )
@@ -118,6 +125,7 @@ def get_llm_overview_stats(
         func.count(LLMCallLog.id).label("calls"),
         func.sum(LLMCallLog.total_tokens).label("tokens"),
         func.sum(LLMCallLog.estimated_cost_usd).label("cost"),
+        func.sum(LLMCallLog.estimated_cost_cny).label("cost_cny"),
         func.avg(LLMCallLog.latency_ms).label("avg_latency_ms"),
     ).filter(LLMCallLog.created_at >= cutoff)
     if user_id is not None:
@@ -132,6 +140,7 @@ def get_llm_overview_stats(
             "calls": int(item.calls or 0),
             "tokens": int(item.tokens or 0),
             "cost_usd": round(float(item.cost or 0), 6),
+            "cost_cny": round(float(item.cost_cny or 0), 6),
             "avg_latency_ms": round(float(item.avg_latency_ms or 0), 2),
         }
         for item in daily_query.all()
@@ -186,6 +195,7 @@ def get_llm_overview_stats(
         "failed_calls": failed_calls,
         "total_tokens": total_tokens,
         "total_cost_usd": total_cost,
+        "total_cost_cny": total_cost_cny,
         "avg_latency_ms": avg_latency_ms,
         "daily_stats": daily_stats,
         "endpoint_stats": endpoint_stats,

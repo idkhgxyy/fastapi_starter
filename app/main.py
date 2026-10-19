@@ -71,6 +71,16 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables ensured.")
 
+    # 定价中心：幂等写入内置模型单价（成本熔断/用量统计依赖）
+    from app.db.session import SessionLocal
+    from app.services.pricing_service import seed_default_pricings
+
+    seed_db = SessionLocal()
+    try:
+        seed_default_pricings(seed_db)
+    finally:
+        seed_db.close()
+
     # Redis 连通性检查
     logger.info("Testing Redis connection...")
     redis_client = Redis.from_url(settings.REDIS_URL, decode_responses=True)

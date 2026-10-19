@@ -52,17 +52,19 @@ def _add_log(db, user_id=1, model_name="deepseek-v4-flash-0731", p=1000, c=1000,
 
 
 class TestEstimateCostCny:
-    def test_known_model_price(self):
-        # deepseek-v4-flash-0731: 输入 3 元/M，输出 9 元/M
+    def test_known_model_price(self, db_session):
+        # deepseek-v4-flash-0731: 输入 3 元/M，输出 9 元/M（未种子化时回退全局配置，数值相同）
         # 1000 prompt + 1000 completion = (3 + 9) / 1000 = 0.012 元
-        assert estimate_cost_cny("deepseek-v4-flash-0731", 1000, 1000) == pytest.approx(0.012)
+        assert estimate_cost_cny(
+            db_session, "deepseek-v4-flash-0731", 1000, 1000
+        ) == pytest.approx(0.012)
 
-    def test_unknown_model_falls_back_to_settings(self):
+    def test_unknown_model_falls_back_to_settings(self, db_session):
         # 未收录模型使用 settings 全局单价
         p = settings.LLM_INPUT_PRICE_PER_1M
         o = settings.LLM_OUTPUT_PRICE_PER_1M
         expected = (1000 * p + 2000 * o) / 1_000_000
-        assert estimate_cost_cny("some-unknown-model", 1000, 2000) == pytest.approx(expected)
+        assert estimate_cost_cny(db_session, "some-unknown-model", 1000, 2000) == pytest.approx(expected)
 
 
 class TestGetSpentCny:

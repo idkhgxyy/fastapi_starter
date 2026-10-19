@@ -43,6 +43,7 @@ function generateDailyStats(days: number) {
       calls: Math.floor(Math.random() * 50) + 5,
       tokens: Math.floor(Math.random() * 5000) + 500,
       cost_usd: parseFloat((Math.random() * 0.05 + 0.005).toFixed(4)),
+      cost_cny: parseFloat((Math.random() * 0.4 + 0.04).toFixed(4)),
       avg_latency_ms: Math.floor(Math.random() * 3000) + 500,
     })
   }
@@ -55,6 +56,7 @@ const mockStats: LLMStats = {
   failed_calls: 6,
   total_tokens: 45678,
   total_cost_usd: 0.0523,
+  total_cost_cny: 0.3812,
   avg_latency_ms: 2150,
   daily_stats: generateDailyStats(7),
   endpoint_stats: [
@@ -81,6 +83,7 @@ const mockCallLogs: LLMCallLog[] = Array.from({ length: 20 }).map((_, i) => ({
   total_tokens: 0,
   latency_ms: Math.floor(Math.random() * 4000) + 200,
   estimated_cost_usd: parseFloat((Math.random() * 0.002).toFixed(6)),
+  estimated_cost_cny: parseFloat((Math.random() * 0.02).toFixed(6)),
   status: i % 5 === 0 ? 'failed' : 'success',
   error_message: i % 5 === 0 ? 'Rate limit exceeded' : null,
   created_at: new Date(Date.now() - i * 60000).toISOString(),

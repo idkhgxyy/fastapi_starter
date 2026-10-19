@@ -26,10 +26,10 @@ const cards = [
     sub: () => '',
   },
   {
-    key: 'total_cost_usd' as const,
-    label: '总成本',
-    format: (s: LLMStats) => `$${s.total_cost_usd.toFixed(4)}`,
-    sub: () => '',
+    key: 'total_cost_cny' as const,
+    label: '总成本 (CNY)',
+    format: (s: LLMStats) => `¥${s.total_cost_cny.toFixed(4)}`,
+    sub: (s: LLMStats) => (s.total_cost_cny > 0 ? `按定价中心忙时价折算` : ''),
   },
 ]
 
