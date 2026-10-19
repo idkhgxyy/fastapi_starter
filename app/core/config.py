@@ -67,7 +67,9 @@ class Settings(BaseSettings):
 
     # 语义缓存：相似问题命中缓存则免调用 LLM（省钱 + 降延迟）
     SEMANTIC_CACHE_ENABLED: bool = True
-    SEMANTIC_CACHE_THRESHOLD: float = 0.92  # 余弦相似度阈值，达到即命中
+    # 阈值与 embedding 模型强相关：bge-m3 相似度分布偏高（同义改写 ~0.9+）用 0.92；
+    # text-embedding-v4 分布偏低（实测同义改写 ~0.74、无关问题 ~0.19）用 0.65
+    SEMANTIC_CACHE_THRESHOLD: float = 0.92
 
     # 闲时批量任务（Celery beat 每天 22:30 北京时间触发，落在百炼闲时窗口）
     SUMMARIZE_MAX_DOCS_PER_RUN: int = 5  # 每轮最多摘要的文档数
