@@ -56,6 +56,8 @@ class Settings(BaseSettings):
 
     # Ollama 服务地址（用于健康检查等）
     OLLAMA_BASE_URL: str = "http://localhost:11434/v1"
+    # 云端不可用（调用失败/预算触顶/未配置 Key）时的本地降级模型
+    OLLAMA_FALLBACK_MODEL: str = "qwen2.5:3b"
 
     # RAG 配置
     EMBEDDING_DIMENSION: int = 1024

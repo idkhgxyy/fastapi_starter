@@ -351,27 +351,26 @@ async def _save_history_messages(
         logger.warning(f"保存会话历史失败（不影响本次对话）: {e}")
 
 
-async def generate_chat_reply(
-    message: str, db: Session = None, current_user_id: int = None, session_id: str = None
+def _build_fallback_info() -> Union[LLMClientInfo, None]:
+    """构建本地 Ollama 降级客户端；Mock 模式下不需要降级，返回 None"""
+    if settings.LLM_MOCK:
+        return None
+    client = AsyncOpenAI(api_key="ollama", base_url=settings.OLLAMA_BASE_URL)
+    return LLMClientInfo(client=client, model_name=settings.OLLAMA_FALLBACK_MODEL)
+
+
+async def _generate_chat_reply_with_client(
+    message: str,
+    db: Session,
+    current_user_id: int,
+    session_id: str,
+    info: LLMClientInfo,
+    provider: str,
 ) -> str:
+    """使用指定 LLM 客户端生成回复（含 Tool Calling / RAG 上下文 / 多轮历史）。
+
+    调用失败时写入失败日志并抛出异常，由调用方决定是否降级到本地模型。
     """
-    调用大语言模型生成回复 (带 Tool Calling 支持)
-    """
-    user = db.get(User, current_user_id) if db and current_user_id else None
-
-    # 成本熔断：累计花费达到红线后拒绝调用
-    if db:
-        budget = check_budget(db, current_user_id)
-        if not budget.allowed:
-            return budget_reject_message(budget)
-
-    info = get_llm_client(user)
-
-    if not info.client.api_key:
-        return "【系统提示】大模型 API Key 尚未配置，请在系统或个人设置中配置。"
-
-    provider = (user.llm_provider if user else None) or settings.LLM_PROVIDER
-
     started_at = start_timer()
 
     # 初始对话上下文
@@ -561,6 +560,69 @@ async def generate_chat_reply(
                 model_name=info.model_name,
                 provider=provider,
             )
+        raise
+
+
+async def generate_chat_reply(
+    message: str, db: Session = None, current_user_id: int = None, session_id: str = None
+) -> str:
+    """
+    调用大语言模型生成回复 (带 Tool Calling 支持)。
+
+    可用性策略：云端不可用（调用失败 / 预算触顶 / 未配置 Key）时
+    自动降级到本地 Ollama，并在回复前缀中注明。
+    """
+    user = db.get(User, current_user_id) if db and current_user_id else None
+
+    budget = check_budget(db, current_user_id) if db else None
+    budget_blocked = budget is not None and not budget.allowed
+
+    info = get_llm_client(user)
+    provider = (user.llm_provider if user else None) or settings.LLM_PROVIDER
+
+    fallback = _build_fallback_info()
+
+    # 场景一：预算触顶 —— 云端不能用（省钱是目的），尝试纯本地
+    if budget_blocked:
+        if fallback is not None:
+            logger.warning("已达到云端预算，降级到本地模型回答")
+            try:
+                reply = await _generate_chat_reply_with_client(
+                    message, db, current_user_id, session_id, fallback, "ollama"
+                )
+                return f"（提示：已达到云端预算，本次由本地模型 {fallback.model_name} 回答）\n\n{reply}"
+            except Exception as e:
+                logger.error(f"本地降级失败: {e}")
+        return budget_reject_message(budget)
+
+    # 场景二：未配置任何 Key —— 尝试本地兜底
+    if not info.client.api_key:
+        if fallback is not None:
+            logger.warning("云端 Key 未配置，降级到本地模型回答")
+            try:
+                reply = await _generate_chat_reply_with_client(
+                    message, db, current_user_id, session_id, fallback, "ollama"
+                )
+                return f"（提示：云端 Key 未配置，本次由本地模型 {fallback.model_name} 回答）\n\n{reply}"
+            except Exception as e:
+                logger.error(f"本地降级失败: {e}")
+        return "【系统提示】大模型 API Key 尚未配置，请在系统或个人设置中配置。"
+
+    # 场景三：正常调用，失败时降级
+    try:
+        return await _generate_chat_reply_with_client(
+            message, db, current_user_id, session_id, info, provider
+        )
+    except Exception as e:
+        if fallback is not None:
+            logger.warning(f"云端调用失败（{str(e)[:200]}），降级到本地模型 {fallback.model_name}")
+            try:
+                reply = await _generate_chat_reply_with_client(
+                    message, db, current_user_id, session_id, fallback, "ollama"
+                )
+                return f"（提示：云端服务暂不可用，本次由本地模型 {fallback.model_name} 回答）\n\n{reply}"
+            except Exception as e2:
+                logger.error(f"本地降级也失败: {e2}")
         return f"【系统提示】模型调用失败，请检查网络或 API 配置。错误详情: {str(e)}"
 
 
@@ -569,28 +631,48 @@ async def generate_chat_reply_stream(
 ):
     """
     流式调用大语言模型生成回复 (SSE)。不支持 Tool Calling，如果需要 Tool Calling 建议先判断。
-    这里为了演示，提供最基础的流式输出支持。
+
+    可用性策略与非流式一致：预算触顶/未配置 Key 时只尝试本地 Ollama，
+    正常调用失败时自动追加本地候选。
     """
     user = db.get(User, current_user_id) if db and current_user_id else None
 
-    # 成本熔断：累计花费达到红线后拒绝调用
-    if db:
-        budget = check_budget(db, current_user_id)
-        if not budget.allowed:
-            error = json.dumps({"error": budget_reject_message(budget)}, ensure_ascii=False)
-            yield f"data: {error}\n\n"
+    # 候选列表：(客户端信息, provider, 降级提示)。按序尝试，仅在建立连接前失败才切换候选
+    candidates: list = []
+
+    budget = check_budget(db, current_user_id) if db else None
+    if budget is not None and not budget.allowed:
+        fallback = _build_fallback_info()
+        if fallback is None:
+            data = json.dumps({"error": budget_reject_message(budget)}, ensure_ascii=False)
+            yield f"data: {data}\n\n"
             return
+        candidates.append(
+            (fallback, "ollama", f"（提示：已达到云端预算，本次由本地模型 {fallback.model_name} 回答）")
+        )
+    else:
+        info = get_llm_client(user)
+        provider = (user.llm_provider if user else None) or settings.LLM_PROVIDER
+        if not info.client.api_key:
+            fallback = _build_fallback_info()
+            if fallback is None:
+                yield 'data: {"error": "API Key 未配置"}\n\n'
+                return
+            candidates.append(
+                (fallback, "ollama", f"（提示：云端 Key 未配置，本次由本地模型 {fallback.model_name} 回答）")
+            )
+        else:
+            candidates.append((info, provider, None))
+            fallback = _build_fallback_info()
+            if fallback is not None:
+                candidates.append(
+                    (fallback, "ollama", f"（提示：云端服务暂不可用，本次由本地模型 {fallback.model_name} 回答）")
+                )
 
-    info = get_llm_client(user)
-
-    if not info.client.api_key:
-        yield 'data: {"error": "API Key 未配置"}\n\n'
-        return
-
-    provider = (user.llm_provider if user else None) or settings.LLM_PROVIDER
     started_at = start_timer()
     prompt_tokens = completion_tokens = total_tokens = 0
     content_parts = []
+    info, provider, degraded_note = candidates[0]
 
     system_content = "你是一个有用的 AI 助手。"
     knowledge_context = await _get_knowledge_context(db, current_user_id, message)
@@ -607,15 +689,53 @@ async def generate_chat_reply_stream(
     else:
         messages = base_messages
 
+    # 按候选顺序建立连接；候选耗尽才报错
+    response = None
+    last_error: Union[Exception, None] = None
+    for cand_index, (cand_info, cand_provider, cand_note) in enumerate(candidates):
+        try:
+            response = await cand_info.client.chat.completions.create(
+                model=cand_info.model_name,
+                messages=messages,
+                temperature=0.7,
+                stream=True,
+                # 请求最后一个 chunk 携带 usage（OpenAI 兼容协议），用于成本统计与熔断
+                stream_options={"include_usage": True},
+            )
+            info, provider, degraded_note = cand_info, cand_provider, cand_note
+            break
+        except Exception as e:
+            last_error = e
+            logger.warning(
+                f"流式候选 {cand_index + 1}/{len(candidates)} ({cand_info.model_name}) 连接失败: {str(e)[:200]}"
+            )
+
+    if response is None:
+        if db:
+            create_llm_call_log(
+                db,
+                user_id=current_user_id,
+                endpoint="/api/v1/chat",
+                prompt=message,
+                response=None,
+                tool_calls=None,
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                latency_ms=elapsed_ms(started_at),
+                status="failed",
+                error_message=str(last_error),
+                model_name=info.model_name,
+                provider=provider,
+            )
+        data = json.dumps({"error": str(last_error)}, ensure_ascii=False)
+        yield f"data: {data}\n\n"
+        return
+
     try:
-        response = await info.client.chat.completions.create(
-            model=info.model_name,
-            messages=messages,
-            temperature=0.7,
-            stream=True,
-            # 请求最后一个 chunk 携带 usage（OpenAI 兼容协议），用于成本统计与熔断
-            stream_options={"include_usage": True},
-        )
+        if degraded_note:
+            data = json.dumps({"content": degraded_note}, ensure_ascii=False)
+            yield f"data: {data}\n\n"
 
         async for chunk in response:
             # 流式协议中 usage 随空的 choices 附在最后一个 chunk
