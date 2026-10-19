@@ -238,10 +238,10 @@ if _static_dir:
             try:
                 response = await super().get_response(path, scope)
             except StarletteHTTPException as exc:
-                if exc.status_code != 404:
+                if exc.status_code != 404 or path.startswith("api/"):
                     raise
                 return await super().get_response("index.html", scope)
-            if response.status_code == 404:
+            if response.status_code == 404 and not path.startswith("api/"):
                 return await super().get_response("index.html", scope)
             return response
 
