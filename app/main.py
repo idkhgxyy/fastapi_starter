@@ -226,13 +226,21 @@ for _dir in _static_candidates:
         break
 
 if _static_dir:
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
     class SPAStaticFiles(StaticFiles):
         """SPA 路由回退：/chat、/settings 等前端路径在磁盘上不存在，
-        静态服务 404 时统一回退到 index.html，交给前端路由处理。
+        静态服务以 HTTPException(404) 或 404 响应的形式失败，
+        统一回退到 index.html 交给前端路由处理。
         API 路由注册在挂载之前，不受此回退影响。"""
 
         async def get_response(self, path: str, scope):
-            response = await super().get_response(path, scope)
+            try:
+                response = await super().get_response(path, scope)
+            except StarletteHTTPException as exc:
+                if exc.status_code != 404:
+                    raise
+                return await super().get_response("index.html", scope)
             if response.status_code == 404:
                 return await super().get_response("index.html", scope)
             return response
