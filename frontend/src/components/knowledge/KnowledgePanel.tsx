@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type ChangeEvent } from 'react'
 import type { Document } from '@/types'
-import { listDocuments, uploadDocument, deleteDocument, queryKnowledgeBase } from '@/services/ragService'
+import { listDocuments, uploadDocument, deleteDocument, searchKnowledgeBase, type SearchResultItem } from '@/services/ragService'
 import { IconFile, IconUpload, IconTrash, IconSearch, IconRefresh, IconX } from '@/components/ui/Icons'
 import { statusLabels, statusColors } from '@/components/knowledge/constants'
 
@@ -10,8 +10,9 @@ export default function KnowledgePanel() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
-  const [queryResult, setQueryResult] = useState<{ answer: string; source_chunks: string[] } | null>(null)
+  const [queryResult, setQueryResult] = useState<SearchResultItem[] | null>(null)
   const [querying, setQuerying] = useState(false)
+  const [queryError, setQueryError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   async function loadDocs() {
@@ -59,10 +60,13 @@ export default function KnowledgePanel() {
     if (!query.trim() || querying) return
     setQuerying(true)
     setQueryResult(null)
+    setQueryError('')
     try {
-      const result = await queryKnowledgeBase(query.trim())
-      setQueryResult(result)
+      const result = await searchKnowledgeBase(query.trim())
+      setQueryResult(result.results)
+      if (result.results.length === 0) setQueryError('没有找到相关片段，试试换个说法')
     } catch {
+      setQueryError('搜索失败，请重试')
     } finally {
       setQuerying(false)
     }
@@ -112,25 +116,25 @@ export default function KnowledgePanel() {
           </div>
         )}
 
+        {queryError && (
+          <div className="mt-2 text-xs text-[var(--color-error)]">{queryError}</div>
+        )}
+
         {queryResult && (
           <div className="mt-2 p-3 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)]">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-[var(--text-tertiary)] uppercase">查询结果</span>
+              <span className="text-xs font-medium text-[var(--text-tertiary)] uppercase">搜索结果 ({queryResult.length})</span>
               <button onClick={() => setQueryResult(null)} className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
                 <IconX />
               </button>
             </div>
-            <p className="text-sm text-[var(--text-primary)] leading-relaxed">{queryResult.answer}</p>
-            {queryResult.source_chunks.length > 0 && (
-              <div className="mt-2 pt-2 border-t border-[var(--border-primary)]">
-                <p className="text-xs text-[var(--text-tertiary)] mb-1">来源片段 ({queryResult.source_chunks.length})</p>
-                {queryResult.source_chunks.map((chunk, i) => (
-                  <p key={i} className="text-xs text-[var(--text-tertiary)] mt-1 line-clamp-2">
-                    [{i + 1}] {chunk}
-                  </p>
-                ))}
+            {queryResult.map((item, i) => (
+              <div key={i} className="mt-1 pt-1 border-t border-[var(--border-primary)] first:border-t-0 first:mt-0 first:pt-0">
+                <p className="text-xs text-[var(--text-tertiary)] mb-0.5">[{i + 1}] 文档 #{item.document_id}</p>
+                <p className="text-sm text-[var(--text-primary)] leading-relaxed line-clamp-4">{item.content}</p>
               </div>
-            )}
+            ))}
+            <p className="mt-2 text-xs text-[var(--text-tertiary)]">想基于结果深入问答？去对话框直接提问</p>
           </div>
         )}
       </div>

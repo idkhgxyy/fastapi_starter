@@ -355,3 +355,108 @@ def test_rag_query_stream_no_chunks(client, monkeypatch, db_session):
         assert resp.status_code == 200
         content = resp.read().decode("utf-8")
         assert "暂无已处理" in content or "data:" in content
+
+
+def test_rag_search_returns_chunks(client, db_session, monkeypatch):
+    """纯检索接口：返回相关片段且不调用 LLM"""
+    import asyncio
+
+    # 注册用户并拿到 id
+    client.post(
+        "/api/v1/users/",
+        json={"username": "searcher", "email": "searcher@test.dev", "password": "testpassword"},
+    )
+    login = client.post(
+        "/api/v1/auth/login",
+        data={"username": "searcher@test.dev", "password": "testpassword"},
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    user_id = login_resp_user_id = None
+
+    from app.services.user_service import UserService  # noqa: F401
+    from app.models.user import User
+    # 通过 API 拿当前用户 id
+    me = client.get("/api/v1/users/me", headers=headers).json()
+    user_id = me["id"]
+
+    from app.models.document import DOCUMENT_STATUS_READY, Document, DocumentChunk
+
+    doc = Document(
+        owner_id=user_id,
+        filename="searchme.md",
+        file_type="md",
+        content="Faiss 是向量检索库" * 20,
+        status=DOCUMENT_STATUS_READY,
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    async def fake_embeddings(self, texts):
+        # 简单确定性向量：非空文本返回固定向量
+        return [[1.0] * 1024 for _ in texts]
+
+    monkeypatch.setattr(
+        "app.services.rag_service.RAGService.get_embeddings", fake_embeddings
+    )
+    db_session.add(
+        DocumentChunk(
+            document_id=doc.id,
+            chunk_index=0,
+            content="Faiss 是 Facebook 开源的向量相似度检索库",
+            embedding=[1.0] * 1024,
+        )
+    )
+    db_session.commit()
+
+    resp = client.get(
+        "/api/v1/rag/search", params={"query": "向量检索库"}, headers=headers
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["query"] == "向量检索库"
+    assert len(data["results"]) >= 1
+    assert "Faiss" in data["results"][0]["content"]
+
+
+def test_rag_query_budget_blocked(client, db_session):
+    """/rag/query 必须受成本熔断约束（此前绕过治理的洞）"""
+    from app.core.config import settings
+    from app.models.llm_call_log import LLMCallLog
+
+    old_budget = settings.LLM_BUDGET_CNY
+    settings.LLM_BUDGET_CNY = 0.0001
+    client.post(
+        "/api/v1/users/",
+        json={"username": "ragbudget", "email": "ragbudget@test.dev", "password": "testpassword"},
+    )
+    login = client.post(
+        "/api/v1/auth/login",
+        data={"username": "ragbudget@test.dev", "password": "testpassword"},
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    user_id = client.get("/api/v1/users/me", headers=headers).json()["id"]
+
+    db_session.add(
+        LLMCallLog(
+            user_id=user_id,
+            endpoint="/api/v1/chat",
+            model_name="deepseek-v4.1-flash",
+            provider="custom",
+            prompt="hi",
+            response="x",
+            prompt_tokens=1_000_000,
+            completion_tokens=0,
+            total_tokens=1_000_000,
+            latency_ms=1.0,
+            estimated_cost_usd=0.0,
+            status="success",
+        )
+    )
+    db_session.commit()
+
+    resp = client.post(
+        "/api/v1/rag/query", json={"query": "测试"}, headers=headers
+    )
+    assert resp.status_code == 402
+    assert "成本熔断" in str(resp.json())
+    settings.LLM_BUDGET_CNY = old_budget

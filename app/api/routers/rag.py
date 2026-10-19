@@ -1,11 +1,12 @@
 import json
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, get_db
 from app.schemas.rag import DocumentResponse, RAGQueryRequest, RAGQueryResponse
+from app.services.cost_guard import budget_reject_message, check_budget
 from app.services.llm_observability_service import (
     create_llm_call_log,
     elapsed_ms,
@@ -14,6 +15,8 @@ from app.services.llm_observability_service import (
 )
 from app.services.llm_service import get_llm_client
 from app.services.rag_service import RAGService, append_session_message, load_session_history
+from app.services.pricing_service import estimate_cost_cny
+from app.services.semantic_cache import lookup_semantic_cache, store_semantic_cache
 from app.utils.file_parser import get_supported_extensions, parse_file
 from app.worker.tasks import process_document_task
 
@@ -131,6 +134,29 @@ async def delete_document(
     )
 
 
+@router.get(
+    "/search",
+    summary="知识库纯检索（只返回相关片段，不调用 LLM、零 LLM 成本）", tags=["RAG"],
+)
+async def search_knowledge_base(
+    query: str = Query(..., min_length=1, description="检索关键词或句子"),
+    top_k: int = Query(5, ge=1, le=20),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user),
+):
+    """轻量搜索：向量化后直接返回最相关的文档片段，适合"查一下"场景。"""
+    rag_service = RAGService(db)
+    chunks = await rag_service.retrieve_relevant_chunks(
+        query=query, owner_id=current_user.id, top_k=top_k
+    )
+    return {
+        "query": query,
+        "results": [
+            {"document_id": c.document_id, "content": c.content} for c in chunks
+        ],
+    }
+
+
 @router.post(
     "/query", response_model=RAGQueryResponse, summary="基于知识库检索并回答", tags=["RAG"]
 )
@@ -142,10 +168,30 @@ async def query_knowledge_base(
     """
     1. 接收用户 Query 并计算向量
     2. 使用 pgvector 检索最相似的文档块 (top_k)
-    3. 组装 prompt，调用 LLM (Qwen2.5) 生成答案
+    3. 组装 prompt，调用 LLM 生成答案
+
+    成本治理：与聊天链路同标准 —— 预算熔断 + 语义缓存 + 定价中心记账。
     """
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
+
+    # 成本熔断：预算触顶拒绝调用（此接口此前绕过了治理，现已补齐）
+    budget = check_budget(db, current_user.id)
+    if not budget.allowed:
+        raise HTTPException(status_code=402, detail=budget_reject_message(budget))
+
+    # 语义缓存：相同/相似查询直接复用历史答案
+    cache_hit = await lookup_semantic_cache(db, current_user.id, request.query)
+    if cache_hit is not None:
+        entry, similarity = cache_hit
+        return RAGQueryResponse(
+            query=request.query,
+            answer=(
+                f"（缓存命中 · 相似度 {similarity:.0%} · 已节省 ¥{entry.original_cost_cny:.4f}）\n\n"
+                f"{entry.answer}"
+            ),
+            source_chunks=[],
+        )
 
     rag_service = RAGService(db)
     started_at = start_timer()
@@ -215,6 +261,19 @@ async def query_knowledge_base(
             total_tokens=total_tokens,
             latency_ms=elapsed_ms(started_at),
             status="success",
+            model_name=llm_info.model_name,
+            provider="rag_query",
+        )
+        # 语义缓存写入（供 /rag/query 与聊天链路复用）
+        await store_semantic_cache(
+            db,
+            current_user.id,
+            request.query,
+            response_text,
+            llm_info.model_name,
+            prompt_tokens,
+            completion_tokens,
+            estimate_cost_cny(db, llm_info.model_name, prompt_tokens, completion_tokens),
         )
 
         return RAGQueryResponse(

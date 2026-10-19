@@ -231,19 +231,23 @@ class RAGService:
         query_vector = query_embeddings[0]
         recall_k = top_k * 3
 
-        stmt = (
-            select(DocumentChunk)
-            .join(Document, DocumentChunk.document_id == Document.id)
-            .where(
-                Document.owner_id == owner_id,
-                Document.status == DOCUMENT_STATUS_READY,
+        try:
+            stmt = (
+                select(DocumentChunk)
+                .join(Document, DocumentChunk.document_id == Document.id)
+                .where(
+                    Document.owner_id == owner_id,
+                    Document.status == DOCUMENT_STATUS_READY,
+                )
+                .order_by(DocumentChunk.embedding.cosine_distance(query_vector))
+                .limit(recall_k)
             )
-            .order_by(DocumentChunk.embedding.cosine_distance(query_vector))
-            .limit(recall_k)
-        )
+            result = self.db.execute(stmt)
+            candidates = result.scalars().all()
+        except Exception:
+            # sqlite / 未装 pgvector 扩展的环境：回退 Python 端计算余弦相似度
+            candidates = self._python_fallback_candidates(query_vector, owner_id, recall_k)
 
-        result = self.db.execute(stmt)
-        candidates = result.scalars().all()
         if not candidates:
             return []
 
@@ -263,6 +267,25 @@ class RAGService:
             logger.info(f"重排 Rank {rank} (Score: {score:.4f}): {chunk.content[:60]}...")
 
         return [item[0] for item in scored_candidates[:top_k]]
+
+    def _python_fallback_candidates(self, query_vector, owner_id: int, recall_k: int) -> List[DocumentChunk]:
+        """sqlite / 无 pgvector 环境的检索回退：逐条计算余弦相似度取最优。"""
+        from app.services.semantic_cache import _cosine_similarity, _parse_embedding
+
+        stmt = (
+            select(DocumentChunk)
+            .join(Document, DocumentChunk.document_id == Document.id)
+            .where(
+                Document.owner_id == owner_id,
+                Document.status == DOCUMENT_STATUS_READY,
+            )
+        )
+        scored = []
+        for chunk in self.db.execute(stmt).scalars():
+            similarity = _cosine_similarity(query_vector, _parse_embedding(chunk.embedding))
+            scored.append((similarity, chunk))
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return [chunk for _, chunk in scored[:recall_k]]
 
     async def _predict_rerank_scores(self, reranker, pairs: list[list[str]]) -> list[float]:
         loop = asyncio.get_running_loop()

@@ -27,6 +27,18 @@ export async function queryKnowledgeBase(query: string, topK = 3): Promise<{ ans
   return response.data
 }
 
+export interface SearchResultItem {
+  document_id: number
+  content: string
+}
+
+export async function searchKnowledgeBase(query: string, topK = 5): Promise<{ query: string; results: SearchResultItem[] }> {
+  const response = await api.get<{ query: string; results: SearchResultItem[] }>('/rag/search', {
+    params: { query, top_k: topK },
+  })
+  return response.data
+}
+
 export async function* streamQueryKnowledgeBase(
   query: string,
   topK = 3,
