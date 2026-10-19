@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.logging import get_request_id, logger
 from app.models.llm_call_log import LLMCallLog
 from app.services.pricing_service import estimate_cost_cny
+from app.services.semantic_cache import get_cache_stats
 
 
 def start_timer() -> float:
@@ -189,6 +190,8 @@ def get_llm_overview_stats(
         if item.user_id is not None
     ]
 
+    cache_stats = get_cache_stats(db, user_id)
+
     return {
         "total_calls": total_calls,
         "successful_calls": successful_calls,
@@ -197,6 +200,9 @@ def get_llm_overview_stats(
         "total_cost_usd": total_cost,
         "total_cost_cny": total_cost_cny,
         "avg_latency_ms": avg_latency_ms,
+        "cache_entries": cache_stats["cache_entries"],
+        "cache_hits": cache_stats["cache_hits"],
+        "cache_saved_cny": cache_stats["cache_saved_cny"],
         "daily_stats": daily_stats,
         "endpoint_stats": endpoint_stats,
         "per_user_stats": per_user_stats,

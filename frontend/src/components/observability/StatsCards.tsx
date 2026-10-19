@@ -31,11 +31,17 @@ const cards = [
     format: (s: LLMStats) => `¥${s.total_cost_cny.toFixed(4)}`,
     sub: (s: LLMStats) => (s.total_cost_cny > 0 ? `按定价中心忙时价折算` : ''),
   },
+  {
+    key: 'cache_hits' as const,
+    label: '语义缓存命中',
+    format: (s: LLMStats) => formatNumber(s.cache_hits),
+    sub: (s: LLMStats) => (s.cache_saved_cny > 0 ? `累计节省 ¥${s.cache_saved_cny.toFixed(4)}` : ''),
+  },
 ]
 
 export default function StatsCards({ stats }: { stats: LLMStats }) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
       {cards.map((card) => (
         <div key={card.key} className="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)]">
           <p className="text-xs text-[var(--text-tertiary)] mb-1">{card.label}</p>

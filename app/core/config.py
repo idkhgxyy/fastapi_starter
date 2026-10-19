@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     # RAG 配置
     EMBEDDING_DIMENSION: int = 1024
 
+    # 语义缓存：相似问题命中缓存则免调用 LLM（省钱 + 降延迟）
+    SEMANTIC_CACHE_ENABLED: bool = True
+    SEMANTIC_CACHE_THRESHOLD: float = 0.92  # 余弦相似度阈值，达到即命中
+
     @model_validator(mode="after")
     def _auto_enable_mock(self) -> "Settings":
         """LLM_API_KEY 为空且未显式配置 LLM_MOCK 时自动启用 Mock 模式，实现开箱即用。

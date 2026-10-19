@@ -24,6 +24,11 @@ from app.services.cost_guard import (
     budget_reject_message,
     check_budget,
 )
+from app.services.pricing_service import estimate_cost_cny
+from app.services.semantic_cache import (
+    lookup_semantic_cache,
+    store_semantic_cache,
+)
 from app.services.llm_observability_service import (
     create_llm_call_log,
     elapsed_ms,
@@ -530,6 +535,21 @@ async def _generate_chat_reply_with_client(
                     model_name=info.model_name,
                     provider=provider,
                 )
+                # 纯对话（未走工具）的回答可缓存：工具回答带时效性，不缓存
+                if final_reply and settings.SEMANTIC_CACHE_ENABLED:
+                    original_cost = estimate_cost_cny(
+                        db, info.model_name, total_prompt_tokens, total_completion_tokens
+                    )
+                    await store_semantic_cache(
+                        db,
+                        current_user_id,
+                        message,
+                        final_reply,
+                        info.model_name,
+                        total_prompt_tokens,
+                        total_completion_tokens,
+                        original_cost,
+                    )
             if session_id and final_reply:
                 await _save_history_messages(
                     current_user_id,
@@ -576,6 +596,16 @@ async def generate_chat_reply(
 
     budget = check_budget(db, current_user_id) if db else None
     budget_blocked = budget is not None and not budget.allowed
+
+    # 语义缓存：相似问题直接复用历史回答，免调用 LLM
+    if db and not budget_blocked:
+        cache_hit = await lookup_semantic_cache(db, current_user_id, message)
+        if cache_hit is not None:
+            entry, similarity = cache_hit
+            return (
+                f"（缓存命中 · 相似度 {similarity:.0%} · 已节省 ¥{entry.original_cost_cny:.4f}）\n\n"
+                f"{entry.answer}"
+            )
 
     info = get_llm_client(user)
     provider = (user.llm_provider if user else None) or settings.LLM_PROVIDER
@@ -641,7 +671,22 @@ async def generate_chat_reply_stream(
     candidates: list = []
 
     budget = check_budget(db, current_user_id) if db else None
-    if budget is not None and not budget.allowed:
+    budget_blocked = budget is not None and not budget.allowed
+
+    # 语义缓存：相似问题直接复用历史回答
+    if db and not budget_blocked:
+        cache_hit = await lookup_semantic_cache(db, current_user_id, message)
+        if cache_hit is not None:
+            entry, similarity = cache_hit
+            note = f"（缓存命中 · 相似度 {similarity:.0%} · 已节省 ¥{entry.original_cost_cny:.4f}）\n\n"
+            data = json.dumps({"content": note}, ensure_ascii=False)
+            yield f"data: {data}\n\n"
+            data = json.dumps({"content": entry.answer}, ensure_ascii=False)
+            yield f"data: {data}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+    if budget is not None and budget_blocked:
         fallback = _build_fallback_info()
         if fallback is None:
             data = json.dumps({"error": budget_reject_message(budget)}, ensure_ascii=False)
@@ -783,6 +828,21 @@ async def generate_chat_reply_stream(
                     {"role": "user", "content": message},
                     {"role": "assistant", "content": full_content},
                 ],
+            )
+        # 流式回答也可缓存（流式链路无工具调用）
+        if db and full_content and settings.SEMANTIC_CACHE_ENABLED:
+            original_cost = estimate_cost_cny(
+                db, info.model_name, prompt_tokens, completion_tokens
+            )
+            await store_semantic_cache(
+                db,
+                current_user_id,
+                message,
+                full_content,
+                info.model_name,
+                prompt_tokens,
+                completion_tokens,
+                original_cost,
             )
 
     except Exception as e:

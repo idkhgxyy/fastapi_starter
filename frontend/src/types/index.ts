@@ -65,6 +65,9 @@ export interface LLMStats {
   total_tokens: number
   total_cost_usd: number
   total_cost_cny: number
+  cache_entries: number
+  cache_hits: number
+  cache_saved_cny: number
   avg_latency_ms: number
   daily_stats: DailyLLMStats[]
   endpoint_stats: EndpointLLMStats[]

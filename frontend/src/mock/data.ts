@@ -57,6 +57,9 @@ const mockStats: LLMStats = {
   total_tokens: 45678,
   total_cost_usd: 0.0523,
   total_cost_cny: 0.3812,
+  cache_entries: 18,
+  cache_hits: 43,
+  cache_saved_cny: 0.0912,
   avg_latency_ms: 2150,
   daily_stats: generateDailyStats(7),
   endpoint_stats: [

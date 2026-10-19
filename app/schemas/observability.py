@@ -52,6 +52,9 @@ class LLMStatsResponse(BaseModel):
     total_tokens: int = Field(..., description="总 token 数")
     total_cost_usd: float = Field(..., description="估算总成本（美元，旧字段）")
     total_cost_cny: float = Field(0.0, description="总成本（元，按定价中心忙时价折算）")
+    cache_entries: int = Field(0, description="语义缓存条目数")
+    cache_hits: int = Field(0, description="语义缓存累计命中次数")
+    cache_saved_cny: float = Field(0.0, description="语义缓存累计节省（元）")
     avg_latency_ms: float = Field(..., description="平均耗时（毫秒）")
     daily_stats: List[DailyLLMStats]
     endpoint_stats: List[EndpointLLMStats]
