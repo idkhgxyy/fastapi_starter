@@ -14,3 +14,4 @@ frontend/.env.local
 
 # interview review (local only)
 interview-review/
+papers/
