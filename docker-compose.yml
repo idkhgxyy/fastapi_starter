@@ -16,8 +16,6 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/fastapi_db
       - REDIS_URL=redis://redis:6379/0
-      - OLLAMA_BASE_URL=http://ollama:11434/v1
-      - EMBEDDING_BASE_URL=http://ollama:11434/v1
     volumes:
       - .:/app
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
@@ -78,8 +76,6 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/fastapi_db
       - REDIS_URL=redis://redis:6379/0
-      - OLLAMA_BASE_URL=http://ollama:11434/v1
-      - EMBEDDING_BASE_URL=http://ollama:11434/v1
     depends_on:
       redis:
         condition: service_healthy
