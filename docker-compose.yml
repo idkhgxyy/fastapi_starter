@@ -10,7 +10,7 @@ services:
     build: .
     container_name: fastapi-starter-api
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     environment:
@@ -43,7 +43,7 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=fastapi_db
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -58,7 +58,7 @@ services:
     container_name: fastapi-starter-redis
     restart: always
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -106,7 +106,7 @@ services:
     volumes:
       - .:/app
     ports:
-      - "5555:5555"
+      - "127.0.0.1:5555:5555"
     environment:
       - REDIS_URL=redis://redis:6379/0
     depends_on:
@@ -121,7 +121,7 @@ services:
       - full
     restart: always
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
@@ -139,7 +139,7 @@ services:
       - monitor
     restart: always
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
@@ -154,7 +154,7 @@ services:
       - monitor
     restart: always
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
