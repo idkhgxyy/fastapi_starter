@@ -24,11 +24,6 @@ from app.services.cost_guard import (
     budget_reject_message,
     check_budget,
 )
-from app.services.pricing_service import estimate_cost_cny
-from app.services.semantic_cache import (
-    lookup_semantic_cache,
-    store_semantic_cache,
-)
 from app.services.llm_observability_service import (
     create_llm_call_log,
     elapsed_ms,
@@ -37,7 +32,12 @@ from app.services.llm_observability_service import (
     start_timer,
 )
 from app.services.mcp_service import MCPService
+from app.services.pricing_service import estimate_cost_cny
 from app.services.rag_service import RAGService, append_session_message, load_session_history
+from app.services.semantic_cache import (
+    lookup_semantic_cache,
+    store_semantic_cache,
+)
 from app.utils.encryption import decrypt_api_key
 
 # 多轮对话注入的最大历史条数（与 Redis 会话存储的上限一致）

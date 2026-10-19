@@ -8,7 +8,7 @@ settings 全局单价（作为兜底）。查询结果带 TTL 内存缓存，避
 """
 
 import time
-from typing import Optional, Tuple
+from typing import Tuple
 
 from sqlalchemy.orm import Session
 

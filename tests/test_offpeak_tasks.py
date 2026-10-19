@@ -1,13 +1,12 @@
 """闲时批量摘要任务单元测试"""
 
-from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
 
 from app.models.document import DOCUMENT_STATUS_READY, Document
 from app.worker.celery_app import celery_app
-from app.worker.tasks import _summarize_document, summarize_pending_documents
+from app.worker.tasks import _summarize_document
 
 
 @pytest.fixture(autouse=True)
@@ -80,7 +79,7 @@ class TestSummarizeDocument:
         import app.services.llm_service as llm_service
 
         monkeypatch.setattr(llm_service, "_build_fallback_info", lambda: None)
-        with pytest.raises(Exception):
+        with pytest.raises(RuntimeError, match="无可用 LLM"):
             asyncio_run(_summarize_document(db_session, ready_doc))
 
 
