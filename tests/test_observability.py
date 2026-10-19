@@ -1,6 +1,9 @@
 from time import perf_counter
 from types import SimpleNamespace
 
+import pytest
+
+from app.models.llm_call_log import LLMCallLog
 from app.services.llm_observability_service import (
     elapsed_ms,
     estimate_cost_usd,
@@ -88,3 +91,55 @@ class TestSerializeToolCalls:
         assert result is not None
         assert "create_task" in result
         assert "get_system_status" in result
+
+
+class TestLLMCallLogCostField:
+    """
+    回归：/observability/llm-calls 必须把人民币成本透给前端。
+
+    曾经构造 LLMCallLogOut 时漏传 estimated_cost_cny，pydantic 用 schema 默认值 0.0
+    兜住，于是数据库里明明有 ¥0.1356，日志明细表却整列显示 ¥0.0000。
+    """
+
+    def test_llm_calls_exposes_estimated_cost_cny(self, client, db_session):
+        client.post(
+            "/api/v1/users/",
+            json={
+                "username": "costviewer",
+                "email": "costviewer@test.dev",
+                "password": "testpassword",
+            },
+        )
+        login = client.post(
+            "/api/v1/auth/login",
+            data={"username": "costviewer@test.dev", "password": "testpassword"},
+        )
+        assert login.status_code == 200
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        user_id = client.get("/api/v1/users/me", headers=headers).json()["id"]
+
+        db_session.add(
+            LLMCallLog(
+                user_id=user_id,
+                endpoint="/chat/",
+                model_name="deepseek-v4.1-flash",
+                provider="dashscope",
+                prompt="hello",
+                response="world",
+                prompt_tokens=1000,
+                completion_tokens=500,
+                total_tokens=1500,
+                latency_ms=120.0,
+                estimated_cost_usd=0.0,
+                estimated_cost_cny=0.1234,
+                status="success",
+            )
+        )
+        db_session.commit()
+
+        resp = client.get("/api/v1/observability/llm-calls?limit=10", headers=headers)
+        assert resp.status_code == 200
+        mine = [r for r in resp.json() if r["model_name"] == "deepseek-v4.1-flash"]
+        assert mine, "刚写入的调用日志应当出现在明细列表里"
+        assert mine[0]["estimated_cost_cny"] == pytest.approx(0.1234)
+        assert mine[0]["estimated_cost_usd"] == pytest.approx(0.0)

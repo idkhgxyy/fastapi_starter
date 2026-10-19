@@ -52,6 +52,7 @@ async def list_llm_calls(
             total_tokens=log.total_tokens,
             latency_ms=log.latency_ms,
             estimated_cost_usd=log.estimated_cost_usd,
+            estimated_cost_cny=log.estimated_cost_cny,
             status=log.status,
             error_message=log.error_message,
             created_at=log.created_at.isoformat(),
