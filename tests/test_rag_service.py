@@ -16,6 +16,7 @@ from app.models.document import (
     DOCUMENT_STATUS_READY,
     Document,
 )
+from app.models.qa_cache import QACacheEntry
 from app.models.user import User
 from app.services.rag_service import (
     SUMMARY_INJECTION_PREVIEW_CHARS,
@@ -382,3 +383,62 @@ class TestKnowledgeContextBuild:
         result = asyncio.run(svc.build_knowledge_context(query="串讲讲", owner_id=owner, top_k=3))
 
         assert result.source_labels() == ["片段A", "《A.pdf》（文档摘要）"]
+
+
+def _add_cache_entry(db, *, owner, index=0):
+    vector = [0.0] * 1024
+    vector[index] = 1.0
+    db.add(
+        QACacheEntry(
+            user_id=owner,
+            question="知识库变更前的旧问题",
+            answer="旧答案",
+            embedding=vector,
+            model_name="m",
+        )
+    )
+    db.commit()
+
+
+class TestSemanticCacheInvalidation:
+    """知识库真的变了才失效缓存：处理完成 / 删除 两个时点。"""
+
+    def test_process_document_ready_invalidates_owner_cache(self, db_session):
+        owner = _next_owner()
+        svc = RAGService(db_session)
+        doc = svc.create_document_record(filename="new.md", content="内容" * 20, owner_id=owner)
+        _add_cache_entry(db_session, owner=owner)
+        assert db_session.query(QACacheEntry).filter_by(user_id=owner).count() == 1
+
+        async def fake_embeddings(texts):
+            return [[0.1] * 1024 for _ in texts]
+
+        with patch.object(svc, "get_embeddings", side_effect=fake_embeddings):
+            asyncio.run(svc.process_document(document_id=doc.id))
+
+        assert db_session.query(QACacheEntry).filter_by(user_id=owner).count() == 0
+
+    def test_delete_document_invalidates_owner_cache(self, db_session):
+        owner = _next_owner()
+        svc = RAGService(db_session)
+        doc = svc.create_document_record(filename="del.md", content="内容", owner_id=owner)
+        _add_cache_entry(db_session, owner=owner)
+
+        svc.delete_document(document_id=doc.id, owner_id=owner)
+
+        assert db_session.query(QACacheEntry).filter_by(user_id=owner).count() == 0
+
+    def test_processing_does_not_touch_other_users_cache(self, db_session):
+        owner = _next_owner()
+        other = _next_owner()
+        svc = RAGService(db_session)
+        doc = svc.create_document_record(filename="mine.md", content="内容" * 20, owner_id=owner)
+        _add_cache_entry(db_session, owner=other, index=1)
+
+        async def fake_embeddings(texts):
+            return [[0.1] * 1024 for _ in texts]
+
+        with patch.object(svc, "get_embeddings", side_effect=fake_embeddings):
+            asyncio.run(svc.process_document(document_id=doc.id))
+
+        assert db_session.query(QACacheEntry).filter_by(user_id=other).count() == 1

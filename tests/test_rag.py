@@ -419,6 +419,37 @@ def test_rag_query_stream_no_chunks(client, monkeypatch, db_session):
         assert "暂无已处理" in content or "data:" in content
 
 
+def test_delete_document_endpoint(client, db_session):
+    """删除接口：返回体要能拿到文件名（删除后实例已失效，属性访问极易踩坑）。"""
+    token = _create_user_and_login(client, "delete-doc")
+    user_id = int(
+        client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {token}"}).json()["id"]
+    )
+
+    document = Document(
+        owner_id=user_id,
+        filename="to-delete.md",
+        file_type="md",
+        content="待删除内容",
+        status=DOCUMENT_STATUS_READY,
+        chunks_count=0,
+    )
+    db_session.add(document)
+    db_session.commit()
+    document_id = document.id
+
+    response = client.delete(
+        f"/api/v1/rag/documents/{document_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "to-delete.md" in payload["message"]
+    assert payload["document_id"] == document_id
+    assert db_session.query(Document).filter_by(id=document_id).count() == 0
+
+
 def test_rag_search_returns_chunks(client, db_session, monkeypatch):
     """纯检索接口：返回相关片段且不调用 LLM"""
     # 注册用户并拿到 id

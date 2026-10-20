@@ -181,9 +181,22 @@ class RAGService:
         document = self.get_document_for_user(document_id=document_id, owner_id=owner_id)
         if document is None:
             return None
+        # 先取出 owner_id：delete + commit 之后实例属性不可再访问
+        owner_id = document.owner_id
         self.db.delete(document)
         self.db.commit()
+        self._invalidate_semantic_cache(owner_id)
         return document
+
+    def _invalidate_semantic_cache(self, owner_id: Optional[int]) -> None:
+        """知识库内容变化后清空该用户的语义缓存（日志由 invalidate_user_cache 统一打）。
+
+        semantic_cache 反向依赖本模块（它要复用 RAGService 做 embedding），
+        所以这里只能函数内导入，避免模块级循环引用。
+        """
+        from app.services.semantic_cache import invalidate_user_cache
+
+        invalidate_user_cache(self.db, owner_id)
 
     def has_ready_documents(self, *, owner_id: int) -> bool:
         stmt = select(func.count(Document.id)).where(
@@ -230,6 +243,8 @@ class RAGService:
         document.error_message = None
         document.chunks_count = 0
         self.db.commit()
+        # 重新处理期间该文档不可检索，缓存里引用它的答案先作废
+        self._invalidate_semantic_cache(document.owner_id)
         self.db.refresh(document)
         return document
 
@@ -261,6 +276,8 @@ class RAGService:
             document.status = DOCUMENT_STATUS_READY
             document.error_message = None
             self.db.commit()
+            # 文档进入可检索状态 = 知识库变了，旧的问答缓存不再可信
+            self._invalidate_semantic_cache(document.owner_id)
             self.db.refresh(document)
             return document
 
@@ -287,6 +304,8 @@ class RAGService:
         document.status = DOCUMENT_STATUS_READY
         document.error_message = None
         self.db.commit()
+        # 新文档已可检索：之前基于旧知识库生成的缓存答案必须作废
+        self._invalidate_semantic_cache(document.owner_id)
         self.db.refresh(document)
         return document
 

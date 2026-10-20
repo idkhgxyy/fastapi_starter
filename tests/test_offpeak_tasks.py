@@ -5,8 +5,10 @@ from types import SimpleNamespace
 import pytest
 
 from app.models.document import DOCUMENT_STATUS_READY, Document
+from app.models.qa_cache import QACacheEntry
+from app.models.user import User
 from app.worker.celery_app import celery_app
-from app.worker.tasks import _summarize_document
+from app.worker.tasks import _persist_summary, _summarize_document
 
 
 @pytest.fixture(autouse=True)
@@ -115,3 +117,62 @@ def asyncio_run(coro):
     import asyncio
 
     return asyncio.run(coro)
+
+
+class TestSummaryPersistence:
+    """摘要从无到有 = 知识库可用信息变了，旧问答缓存必须作废。"""
+
+    def test_persist_summary_invalidates_owner_cache(self, db_session):
+        user_id = 97001
+        if db_session.get(User, user_id) is None:
+            db_session.add(
+                User(
+                    id=user_id,
+                    username="summary_owner",
+                    email="summary_owner@example.com",
+                    hashed_password="hashed",
+                    is_active=True,
+                )
+            )
+            db_session.commit()
+
+        doc = Document(
+            owner_id=user_id,
+            filename="a.md",
+            file_type="md",
+            content="content",
+            status=DOCUMENT_STATUS_READY,
+        )
+        db_session.add(doc)
+        db_session.commit()
+
+        db_session.add(
+            QACacheEntry(
+                user_id=user_id,
+                question="摘要生成前的旧问题",
+                answer="旧答案",
+                embedding=[1.0] + [0.0] * 1023,
+                model_name="m",
+            )
+        )
+        db_session.commit()
+
+        _persist_summary(db_session, doc, "新生成的摘要")
+
+        assert doc.summary == "新生成的摘要"
+        assert db_session.query(QACacheEntry).filter_by(user_id=user_id).count() == 0
+
+    def test_persist_summary_without_owner_is_safe(self, db_session):
+        doc = Document(
+            owner_id=None,
+            filename="no-owner.md",
+            file_type="md",
+            content="content",
+            status=DOCUMENT_STATUS_READY,
+        )
+        db_session.add(doc)
+        db_session.commit()
+
+        _persist_summary(db_session, doc, "摘要")
+
+        assert doc.summary == "摘要"

@@ -4,6 +4,7 @@ from app.core.config import settings
 from app.core.logging import logger
 from app.db.session import SessionLocal
 from app.services.rag_service import RAGService
+from app.services.semantic_cache import invalidate_user_cache
 from app.worker.celery_app import celery_app
 
 
@@ -118,6 +119,17 @@ async def _summarize_document(db, document) -> str:
     return summary
 
 
+def _persist_summary(db, document, summary: str) -> None:
+    """落库摘要，并失效该用户的语义缓存。
+
+    摘要会进入检索上下文（全局性问题的兜底资料），"从无到有"意味着知识库可用
+    信息变了：摘要生成之前缓存的回答可能完全没看到这篇文档的概览，必须作废。
+    """
+    document.summary = summary
+    db.commit()
+    invalidate_user_cache(db, document.owner_id)
+
+
 @celery_app.task(name="app.worker.tasks.summarize_pending_documents")
 def summarize_pending_documents():
     """
@@ -149,8 +161,7 @@ def summarize_pending_documents():
         for document in documents:
             try:
                 summary = asyncio.run(_summarize_document(db, document))
-                document.summary = summary
-                db.commit()
+                _persist_summary(db, document, summary)
                 summarized += 1
                 logger.info(f"==> [闲时摘要] 文档 {document.id} 摘要完成 ({len(summary)} 字)")
             except Exception as exc:

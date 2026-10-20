@@ -6,9 +6,11 @@ import pytest
 
 from app.core.config import settings
 from app.models.qa_cache import QACacheEntry
+from app.models.user import User
 from app.services import semantic_cache
 from app.services.semantic_cache import (
     get_cache_stats,
+    invalidate_user_cache,
     lookup_semantic_cache,
     store_semantic_cache,
 )
@@ -127,3 +129,58 @@ class TestCacheStats:
 
         other = get_cache_stats(db_session, 2)
         assert other["cache_hits"] == 0
+
+
+class TestCacheInvalidation:
+    """知识库变更后旧答案必须作废：按用户整体失效，且不误伤其他用户。"""
+
+    @pytest.fixture
+    def cache_users(self, db_session):
+        for uid in (98001, 98002):
+            if db_session.get(User, uid) is None:
+                db_session.add(
+                    User(
+                        id=uid,
+                        username=f"cache_user_{uid}",
+                        email=f"cache_user_{uid}@example.com",
+                        hashed_password="hashed",
+                        is_active=True,
+                    )
+                )
+        db_session.commit()
+        return 98001, 98002
+
+    def _add_entry(self, db, user_id, index):
+        db.add(
+            QACacheEntry(
+                user_id=user_id,
+                question=f"问题{index}",
+                answer=f"回答{index}",
+                embedding=_vec(index),
+                model_name="m",
+            )
+        )
+
+    def test_removes_only_target_user_entries(self, db_session, cache_users):
+        user_a, user_b = cache_users
+        self._add_entry(db_session, user_a, 0)
+        self._add_entry(db_session, user_a, 1)
+        self._add_entry(db_session, user_b, 2)
+        db_session.commit()
+
+        assert invalidate_user_cache(db_session, user_a) == 2
+
+        remaining = db_session.query(QACacheEntry).all()
+        assert [entry.user_id for entry in remaining] == [user_b]
+
+    def test_returns_zero_when_nothing_cached(self, db_session, cache_users):
+        assert invalidate_user_cache(db_session, cache_users[0]) == 0
+
+    def test_none_user_id_is_noop(self, db_session):
+        db_session.add(
+            QACacheEntry(user_id=None, question="q", answer="a", embedding=_vec(3), model_name="m")
+        )
+        db_session.commit()
+
+        assert invalidate_user_cache(db_session, None) == 0
+        assert db_session.query(QACacheEntry).count() == 1

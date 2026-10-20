@@ -144,6 +144,35 @@ async def store_semantic_cache(
         logger.warning(f"语义缓存写入失败（不影响对话）: {e}")
 
 
+def invalidate_user_cache(db: Session, user_id: Optional[int]) -> int:
+    """知识库内容变化时清空该用户的语义缓存，返回删除条数。
+
+    缓存按问题语义匹配，无法反查一条答案具体引用了哪些文档；而任何一篇文档的
+    新增、删除、重新处理或摘要生成，都可能让历史答案不再正确（典型场景：传了
+    新论文再问同一句话，命中旧答案，新论文等于白传）。因此按用户整体失效——
+    缓存随时可重建，留着过期答案的风险远大于多花一次 LLM 调用。
+
+    失败不抛出：缓存清不掉不能阻断文档处理本身，但会留 warning 日志。
+    """
+    if user_id is None:
+        return 0
+    try:
+        removed = (
+            db.query(QACacheEntry)
+            .filter(QACacheEntry.user_id == user_id)
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"语义缓存失效失败（user_id={user_id}）: {e}")
+        return 0
+
+    if removed:
+        logger.info(f"==> 知识库变更，已清空用户 {user_id} 的语义缓存 {removed} 条")
+    return removed
+
+
 def get_cache_stats(db: Session, user_id: Optional[int]) -> dict:
     """缓存命中统计：总命中次数与累计节省金额"""
     stmt = select(
