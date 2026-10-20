@@ -181,10 +181,9 @@ class RAGService:
         document = self.get_document_for_user(document_id=document_id, owner_id=owner_id)
         if document is None:
             return None
-        # 先取出 owner_id：delete + commit 之后实例属性不可再访问
-        owner_id = document.owner_id
         self.db.delete(document)
         self.db.commit()
+        # owner_id 来自入参（查询时已用它过滤），删除后不必再碰 document 实例属性
         self._invalidate_semantic_cache(owner_id)
         return document
 
