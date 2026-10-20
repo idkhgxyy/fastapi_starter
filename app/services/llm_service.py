@@ -307,24 +307,26 @@ async def _get_knowledge_context(
     """
     检索用户知识库中与消息相关的片段，返回用于注入 system prompt 的上下文。
     用户没有已就绪文档、无相关命中或检索出错时返回 None（不影响正常对话）。
+
+    全局性问题（"串讲四篇论文"）会自动带上文档摘要兜底，检索细节见
+    RAGService.build_knowledge_context。
     """
     if not db or not current_user_id:
         return None
     try:
         rag_service = RAGService(db)
-        chunks = await rag_service.retrieve_relevant_chunks(
+        knowledge = await rag_service.build_knowledge_context(
             query=message, owner_id=current_user_id, top_k=3
         )
-        if not chunks:
+        if not knowledge.context:
             return None
 
-        logger.info(f"==> 知识库命中 {len(chunks)} 个相关片段，注入对话上下文")
-        context_str = "\n\n".join(
-            f"[相关片段 {i}]:\n{chunk.content}" for i, chunk in enumerate(chunks, 1)
+        logger.info(
+            f"==> 知识库上下文注入对话：{len(knowledge.chunks)} 个原文片段 + "
+            f"{len(knowledge.summary_documents)} 篇摘要"
         )
         return (
-            "此外，以下是用户个人知识库（其上传的文档）中与问题可能相关的参考资料：\n\n"
-            f"=== 知识库参考资料 ===\n{context_str}\n=== 结束 ===\n"
+            f"{knowledge.context}\n\n"
             "如果参考资料与用户的问题相关，请优先基于参考资料回答，并说明信息来自用户的知识库文档；"
             "如果与问题无关，请忽略参考资料，正常回答或使用工具。"
         )

@@ -1,5 +1,6 @@
 import asyncio
 import json
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -28,6 +29,75 @@ except ImportError:
     _reranker = None
 
 _embedding_client = None
+
+# 判定"全局性问题"（问整个知识库而非某个细节）的关键词。
+# 这类问题的向量检索天然不占优：query 里没有具体实体，反而可能被参考文献列表这类
+# 字面密集的片段抢到 top-k。命中时额外注入文档摘要，让模型看得见知识库全貌。
+GLOBAL_QUERY_MARKERS = (
+    "总结",
+    "串讲",
+    "概括",
+    "概述",
+    "综述",
+    "梳理",
+    "盘点",
+    "归纳",
+    "对比",
+    "比较",
+    "区别",
+    "异同",
+    "共同点",
+    "联系",
+    "每篇",
+    "各篇",
+    "这几篇",
+    "这几份",
+    "所有",
+    "全部",
+    "分别",
+    "整体",
+    "有哪些",
+    "哪些文档",
+    "哪些资料",
+    "都讲了什么",
+    "讲了什么",
+    "讲了啥",
+    "主要内容",
+)
+
+# 摘要注入上限：单篇截断 + 总篇数截断，避免知识库变大后 prompt 无上限膨胀
+SUMMARY_INJECTION_MAX_DOCS = 8
+SUMMARY_INJECTION_PREVIEW_CHARS = 160
+
+
+def is_global_query(query: str) -> bool:
+    """粗判是否为"问整个知识库"的全局性问题（关键词启发式，宁可多注入不可漏）。"""
+    return any(marker in query for marker in GLOBAL_QUERY_MARKERS)
+
+
+def _chunk_filename(chunk) -> Optional[str]:
+    """取片段所属文档名；对测试替身等没有 document 关系的情况安全返回 None。"""
+    document = getattr(chunk, "document", None)
+    return getattr(document, "filename", None)
+
+
+@dataclass
+class KnowledgeContext:
+    """一次知识库检索的结果：原文片段 + 可选的摘要兜底。
+
+    context 为可直接注入 system prompt 的完整参考块；没有任何可用资料时为 None。
+    """
+
+    context: Optional[str] = None
+    chunks: List[DocumentChunk] = field(default_factory=list)
+    summary_documents: List[Document] = field(default_factory=list)
+    total_ready_documents: int = 0
+
+    def source_labels(self) -> List[str]:
+        """给前端展示的来源列表：原文片段内容 + 被用到的文档摘要标签。"""
+        labels = [chunk.content for chunk in self.chunks]
+        labels.extend(f"《{doc.filename}》（文档摘要）" for doc in self.summary_documents)
+        return labels
 
 
 def _get_embedding_client() -> AsyncOpenAI:
@@ -293,6 +363,114 @@ class RAGService:
         loop = asyncio.get_running_loop()
         scores = await loop.run_in_executor(None, reranker.predict, pairs)
         return list(scores)
+
+    def count_ready_documents(self, *, owner_id: int) -> int:
+        stmt = select(func.count(Document.id)).where(
+            Document.owner_id == owner_id,
+            Document.status == DOCUMENT_STATUS_READY,
+        )
+        return int(self.db.scalar(stmt) or 0)
+
+    def list_document_summaries(self, *, owner_id: int, limit: int) -> List[Document]:
+        """取出已生成摘要的已就绪文档，按上传时间正序（便于"串讲"按脉络展开）。"""
+        stmt = (
+            select(Document)
+            .where(
+                Document.owner_id == owner_id,
+                Document.status == DOCUMENT_STATUS_READY,
+                Document.summary.is_not(None),
+            )
+            .order_by(Document.created_at.asc())
+            .limit(limit)
+        )
+        return list(self.db.execute(stmt).scalars().all())
+
+    async def build_knowledge_context(
+        self, *, query: str, owner_id: int, top_k: int = 3
+    ) -> KnowledgeContext:
+        """检索原文片段，并在需要时用文档摘要兜底，产出可直接注入 prompt 的参考块。
+
+        摘要兜底解决的是向量检索的结构性短板：像"串讲四篇论文"这种没有任何具体
+        实体的全局问题，top-k 很容易被参考文献列表一类字面密集的片段占据，模型
+        因此只能看到零碎引用。此时把每篇文档的摘要补上，模型才能看到知识库全貌。
+        """
+        chunks: List[DocumentChunk] = []
+        try:
+            chunks = await self.retrieve_relevant_chunks(
+                query=query, owner_id=owner_id, top_k=top_k
+            )
+        except Exception as exc:
+            # embedding 调用失败等：不应连带丢掉摘要兜底，降级为"只有摘要"
+            logger.warning(f"知识库检索失败，将仅尝试文档摘要兜底: {exc}")
+
+        # 两种情况下摘要比片段更有价值：① 问的是整个知识库；② 一个片段都没检索到
+        want_summaries = is_global_query(query) or not chunks
+        summary_documents: List[Document] = []
+        total_ready = 0
+        if want_summaries:
+            total_ready = self.count_ready_documents(owner_id=owner_id)
+            if total_ready:
+                summary_documents = self.list_document_summaries(
+                    owner_id=owner_id, limit=SUMMARY_INJECTION_MAX_DOCS
+                )
+
+        if not chunks and not summary_documents:
+            return KnowledgeContext(total_ready_documents=total_ready)
+
+        context = self._render_knowledge_context(
+            chunks=chunks,
+            summary_documents=summary_documents,
+            total_ready=total_ready,
+        )
+        logger.info(
+            f"==> 知识库上下文：{len(chunks)} 个原文片段 + {len(summary_documents)} 篇摘要"
+            f"（全局性问题={is_global_query(query)}）"
+        )
+        return KnowledgeContext(
+            context=context,
+            chunks=chunks,
+            summary_documents=summary_documents,
+            total_ready_documents=total_ready,
+        )
+
+    def _render_knowledge_context(
+        self,
+        *,
+        chunks: List[DocumentChunk],
+        summary_documents: List[Document],
+        total_ready: int,
+    ) -> str:
+        parts = ["=== 知识库参考资料 ==="]
+        parts.append("以下是用户个人知识库（其上传的文档）中的参考资料。")
+
+        if summary_documents:
+            header = f"【文档摘要】知识库共 {total_ready} 篇已就绪文档"
+            if len(summary_documents) < total_ready:
+                header += f"，以下为其中 {len(summary_documents)} 篇"
+            parts.append(
+                header + "。摘要是对全文的压缩，适合把握整体脉络，但不是原文；"
+                "引用具体细节时应以下方原文片段为准。"
+            )
+            for index, document in enumerate(summary_documents, 1):
+                preview = (document.summary or "").strip().replace("\n", " ")
+                if len(preview) > SUMMARY_INJECTION_PREVIEW_CHARS:
+                    preview = preview[:SUMMARY_INJECTION_PREVIEW_CHARS] + "…"
+                parts.append(f"{index}. 《{document.filename}》：{preview}")
+
+        if chunks:
+            parts.append("【原文片段】")
+            for index, chunk in enumerate(chunks, 1):
+                filename = _chunk_filename(chunk)
+                label = f"[片段 {index} · 来自《{filename}》]" if filename else f"[片段 {index}]"
+                parts.append(f"{label}：\n{chunk.content}")
+        elif summary_documents:
+            parts.append(
+                "【原文片段】本次没有检索到与问题直接相关的原文片段。"
+                "请仅基于上面的摘要回答，并明确告知用户这是摘要层面的概括，细节需进一步检索原文。"
+            )
+
+        parts.append("=== 结束 ===")
+        return "\n\n".join(parts)
 
 
 SESSION_PREFIX = "rag_session"

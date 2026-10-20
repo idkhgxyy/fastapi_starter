@@ -3,6 +3,7 @@ RAG 服务层单元测试 (直接调用 Service 而非走 HTTP)
 """
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -13,13 +14,21 @@ from app.models.document import (
     DOCUMENT_STATUS_PROCESSING,
     DOCUMENT_STATUS_QUEUED,
     DOCUMENT_STATUS_READY,
+    Document,
 )
 from app.models.user import User
-from app.services.rag_service import RAGService
+from app.services.rag_service import (
+    SUMMARY_INJECTION_PREVIEW_CHARS,
+    RAGService,
+    is_global_query,
+)
 
 _owner_counter = 99000
 
-_MAX_TEST_USER_ID = 99020
+# 测试用户池上限。documents.owner_id 有外键约束，Postgres 下会强制校验
+# （sqlite 默认不校验，所以这类问题只在 Postgres 上暴露）。
+# 池子耗尽的症状是一堆看不懂的 ForeignKeyViolation，所以这里显式报错。
+_MAX_TEST_USER_ID = 99100
 
 
 def _ensure_test_users_exist(db):
@@ -53,6 +62,10 @@ def _setup_rag_test_users(db_session):
 def _next_owner():
     global _owner_counter
     _owner_counter += 1
+    if _owner_counter > _MAX_TEST_USER_ID:
+        raise RuntimeError(
+            f"测试用户池已耗尽（上限 {_MAX_TEST_USER_ID}）：请调大 _MAX_TEST_USER_ID"
+        )
     return _owner_counter
 
 
@@ -190,3 +203,182 @@ class TestRAGDocumentProcessing:
             processed = asyncio.run(svc.process_document(document_id=doc.id))
         assert processed.status == DOCUMENT_STATUS_READY
         assert processed.chunks_count > 0
+
+
+def _add_document(db, *, owner, filename, summary=None, status=DOCUMENT_STATUS_READY):
+    document = Document(
+        owner_id=owner,
+        filename=filename,
+        file_type="md",
+        content="文档正文占位",
+        status=status,
+        chunks_count=1,
+        summary=summary,
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+    return document
+
+
+class TestGlobalQueryDetection:
+    def test_marks_global_questions(self):
+        for query in (
+            "串讲四篇论文",
+            "帮我总结一下知识库",
+            "这几篇有什么区别",
+            "我都有哪些资料",
+            "整体梳理一遍",
+        ):
+            assert is_global_query(query) is True
+
+    def test_leaves_specific_questions_alone(self):
+        for query in (
+            "Transformer 为什么用自注意力",
+            "BERT 的预训练任务是什么",
+            "如何配置 Redis 连接",
+        ):
+            assert is_global_query(query) is False
+
+
+class TestKnowledgeContextBuild:
+    """摘要兜底：全局问题 / 检索为空时注入摘要，具体问题只给原文片段。"""
+
+    def _service_with_chunks(self, db_session, chunks):
+        svc = RAGService(db_session)
+
+        # 直接挂在实例上（不需要 self），避免走真实 embedding
+        async def fake_retrieve(**kwargs):
+            return chunks
+
+        svc.retrieve_relevant_chunks = fake_retrieve
+        return svc
+
+    def test_global_query_injects_summaries_even_with_chunks(self, db_session):
+        owner = _next_owner()
+        _add_document(db_session, owner=owner, filename="Transformer.pdf", summary="讲自注意力")
+        _add_document(db_session, owner=owner, filename="BERT.pdf", summary="讲双向预训练")
+        chunk = SimpleNamespace(
+            content="原文片段A", document=SimpleNamespace(filename="Transformer.pdf")
+        )
+        svc = self._service_with_chunks(db_session, [chunk])
+
+        result = asyncio.run(
+            svc.build_knowledge_context(query="串讲四篇论文", owner_id=owner, top_k=3)
+        )
+
+        assert result.context is not None
+        assert "文档摘要" in result.context
+        assert "讲自注意力" in result.context and "讲双向预训练" in result.context
+        assert "原文片段A" in result.context
+        assert result.total_ready_documents == 2
+        assert len(result.summary_documents) == 2
+
+    def test_specific_query_skips_summaries(self, db_session):
+        owner = _next_owner()
+        _add_document(db_session, owner=owner, filename="BERT.pdf", summary="讲双向预训练")
+        chunk = SimpleNamespace(content="原文片段B", document=SimpleNamespace(filename="BERT.pdf"))
+        svc = self._service_with_chunks(db_session, [chunk])
+
+        result = asyncio.run(
+            svc.build_knowledge_context(query="BERT 的预训练任务是什么", owner_id=owner, top_k=3)
+        )
+
+        assert result.context is not None
+        assert "原文片段B" in result.context
+        assert "文档摘要" not in result.context
+        assert result.summary_documents == []
+
+    def test_no_chunks_falls_back_to_summaries(self, db_session):
+        owner = _next_owner()
+        _add_document(db_session, owner=owner, filename="CoT.pdf", summary="讲思维链提示")
+        svc = self._service_with_chunks(db_session, [])
+
+        result = asyncio.run(
+            svc.build_knowledge_context(query="随便问点什么", owner_id=owner, top_k=3)
+        )
+
+        assert "讲思维链提示" in result.context
+        assert "没有检索到与问题直接相关的原文片段" in result.context
+
+    def test_no_documents_returns_empty_context(self, db_session):
+        owner = _next_owner()
+        svc = self._service_with_chunks(db_session, [])
+
+        result = asyncio.run(svc.build_knowledge_context(query="串讲讲", owner_id=owner, top_k=3))
+
+        assert result.context is None
+        assert result.total_ready_documents == 0
+
+    def test_documents_without_summary_are_not_injected(self, db_session):
+        owner = _next_owner()
+        _add_document(db_session, owner=owner, filename="待摘要.pdf", summary=None)
+        svc = self._service_with_chunks(db_session, [])
+
+        result = asyncio.run(svc.build_knowledge_context(query="串讲讲", owner_id=owner, top_k=3))
+
+        assert result.context is None
+        assert result.summary_documents == []
+        assert result.total_ready_documents == 1
+
+    def test_summary_preview_is_truncated(self, db_session):
+        owner = _next_owner()
+        _add_document(
+            db_session,
+            owner=owner,
+            filename="长文.pdf",
+            summary="很长" * SUMMARY_INJECTION_PREVIEW_CHARS,
+        )
+        svc = self._service_with_chunks(db_session, [])
+
+        result = asyncio.run(svc.build_knowledge_context(query="串讲讲", owner_id=owner, top_k=3))
+
+        assert "…" in result.context
+        injected = result.context.split("《长文.pdf》：")[1].split("\n")[0]
+        assert len(injected) == SUMMARY_INJECTION_PREVIEW_CHARS + 1
+
+    def test_context_labels_chunk_source_filename(self, db_session):
+        owner = _next_owner()
+        _add_document(db_session, owner=owner, filename="RAG.pdf", summary=None)
+        chunk = SimpleNamespace(content="片段正文", document=SimpleNamespace(filename="RAG.pdf"))
+        svc = self._service_with_chunks(db_session, [chunk])
+
+        result = asyncio.run(
+            svc.build_knowledge_context(query="RAG 是什么", owner_id=owner, top_k=3)
+        )
+
+        assert "来自《RAG.pdf》" in result.context
+
+    def test_chunks_without_document_relation_do_not_crash(self, db_session):
+        owner = _next_owner()
+        _add_document(db_session, owner=owner, filename="x.md", summary=None)
+        svc = self._service_with_chunks(db_session, [SimpleNamespace(content="裸片段")])
+
+        result = asyncio.run(svc.build_knowledge_context(query="细节问题", owner_id=owner, top_k=3))
+
+        assert "裸片段" in result.context
+
+    def test_retrieval_failure_still_falls_back_to_summaries(self, db_session):
+        owner = _next_owner()
+        _add_document(db_session, owner=owner, filename="兜底.pdf", summary="摘要内容")
+        svc = RAGService(db_session)
+
+        async def boom(**kwargs):
+            raise RuntimeError("embedding 服务不可用")
+
+        svc.retrieve_relevant_chunks = boom
+
+        result = asyncio.run(svc.build_knowledge_context(query="串讲讲", owner_id=owner, top_k=3))
+
+        assert "摘要内容" in result.context
+        assert result.chunks == []
+
+    def test_source_labels_include_summary_documents(self, db_session):
+        owner = _next_owner()
+        _add_document(db_session, owner=owner, filename="A.pdf", summary="摘要A")
+        chunk = SimpleNamespace(content="片段A", document=SimpleNamespace(filename="A.pdf"))
+        svc = self._service_with_chunks(db_session, [chunk])
+
+        result = asyncio.run(svc.build_knowledge_context(query="串讲讲", owner_id=owner, top_k=3))
+
+        assert result.source_labels() == ["片段A", "《A.pdf》（文档摘要）"]

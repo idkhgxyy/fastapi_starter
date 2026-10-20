@@ -195,30 +195,30 @@ async def query_knowledge_base(
     rag_service = RAGService(db)
     started_at = start_timer()
     try:
-        chunks = await rag_service.retrieve_relevant_chunks(
+        knowledge = await rag_service.build_knowledge_context(
             query=request.query,
             owner_id=current_user.id,
             top_k=request.top_k,
         )
 
-        if not chunks:
+        if not knowledge.context:
+            # 区分"确实没有文档"与"有文档但这次没检索到"，后者不该误导用户去上传
+            answer = (
+                "知识库中暂无已处理完成的相关文档，请先上传文档并等待处理完成。"
+                if knowledge.total_ready_documents == 0
+                else "暂未在知识库中检索到与问题相关的内容。可以换个说法再试，或等文档摘要生成后再问。"
+            )
             return RAGQueryResponse(
                 query=request.query,
-                answer="知识库中暂无已处理完成的相关文档，请先上传文档并等待处理完成。",
+                answer=answer,
                 source_chunks=[],
             )
 
-        # 3. 组装 Prompt
-        context_texts = []
-        for i, chunk in enumerate(chunks, 1):
-            context_texts.append(f"[相关片段 {i}]:\n{chunk.content}")
-
-        context_str = "\n\n".join(context_texts)
-
+        # 3. 组装 Prompt（参考资料块由 RAGService 统一渲染，含全局问题的摘要兜底）
         system_prompt = (
             "你是一个专业的问答助手。请基于以下提供的参考资料，准确回答用户的问题。\n"
             "如果你不知道答案，或者参考资料中没有相关信息，请直接说明，不要编造。\n\n"
-            f"=== 参考资料 ===\n{context_str}\n=== 结束 ==="
+            f"{knowledge.context}"
         )
 
         messages = [
@@ -276,7 +276,7 @@ async def query_knowledge_base(
         )
 
         return RAGQueryResponse(
-            query=request.query, answer=response_text, source_chunks=[c.content for c in chunks]
+            query=request.query, answer=response_text, source_chunks=knowledge.source_labels()
         )
 
     except Exception as e:
@@ -307,18 +307,23 @@ async def query_knowledge_base_stream(
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
     rag_service = RAGService(db)
-    chunks = await rag_service.retrieve_relevant_chunks(
+    knowledge = await rag_service.build_knowledge_context(
         query=request.query,
         owner_id=current_user.id,
         top_k=request.top_k,
     )
 
-    if not chunks:
+    if not knowledge.context:
+        empty_answer = (
+            "知识库中暂无已处理完成的相关文档，请先上传文档并等待处理完成。"
+            if knowledge.total_ready_documents == 0
+            else "暂未在知识库中检索到与问题相关的内容。可以换个说法再试，或等文档摘要生成后再问。"
+        )
 
         async def _empty():
             data = json.dumps(
                 {
-                    "content": "知识库中暂无已处理完成的相关文档，请先上传文档并等待处理完成。",
+                    "content": empty_answer,
                     "source_chunks": [],
                 },
                 ensure_ascii=False,
@@ -328,15 +333,13 @@ async def query_knowledge_base_stream(
 
         return StreamingResponse(_empty(), media_type="text/event-stream")
 
-    context_texts = [f"[相关片段 {i}]:\n{chunk.content}" for i, chunk in enumerate(chunks, 1)]
-    context_str = "\n\n".join(context_texts)
     system_prompt = (
         "你是一个专业的问答助手。请基于以下提供的参考资料，准确回答用户的问题。\n"
         "如果你不知道答案，或者参考资料中没有相关信息，请直接说明，不要编造。\n\n"
-        f"=== 参考资料 ===\n{context_str}\n=== 结束 ==="
+        f"{knowledge.context}"
     )
 
-    source_chunk_contents = [c.content for c in chunks]
+    source_chunk_contents = knowledge.source_labels()
 
     async def _stream():
         llm_info = get_llm_client(current_user)

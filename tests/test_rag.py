@@ -113,6 +113,68 @@ def test_query_knowledge_base_uses_current_user_scope(client, monkeypatch, db_se
     assert payload["source_chunks"] == ["只属于当前用户的知识片段"]
 
 
+def test_rag_query_global_question_injects_summaries(client, monkeypatch, db_session):
+    """回归：全局性问题必须带上文档摘要兜底。
+
+    线上真实故障：问"串讲四篇论文"时 top-3 检索捞到的是参考文献列表片段，
+    模型只能看到零碎引用。摘要由 Celery beat 每晚生成，这里验证它真的被检索链路读到。
+    """
+    token = _create_user_and_login(client, "global-summary")
+    user_id = int(
+        client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {token}"}).json()["id"]
+    )
+
+    db_session.add(
+        Document(
+            owner_id=user_id,
+            filename="Transformer.pdf",
+            file_type="pdf",
+            content="正文",
+            status=DOCUMENT_STATUS_READY,
+            chunks_count=1,
+            summary="提出自注意力机制，可并行训练",
+        )
+    )
+    db_session.commit()
+
+    async def fake_retrieve(_self, *, query, owner_id, top_k):
+        # 模拟线上真实故障：全局问题一个原文片段都没检索到
+        return []
+
+    captured = {}
+
+    def fake_get_llm_client(user=None):
+        class DummyClient:
+            class chat:
+                class completions:
+                    @staticmethod
+                    async def create(**kwargs):
+                        captured["messages"] = kwargs["messages"]
+                        return SimpleNamespace(
+                            choices=[SimpleNamespace(message=SimpleNamespace(content="串讲如下"))],
+                            usage=SimpleNamespace(
+                                prompt_tokens=5, completion_tokens=7, total_tokens=12
+                            ),
+                        )
+
+        return SimpleNamespace(client=DummyClient(), model_name="test-model")
+
+    monkeypatch.setattr(RAGService, "retrieve_relevant_chunks", fake_retrieve)
+    monkeypatch.setattr("app.api.routers.rag.get_llm_client", fake_get_llm_client)
+
+    response = client.post(
+        "/api/v1/rag/query",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"query": "帮我串讲这些论文", "top_k": 3},
+    )
+
+    assert response.status_code == 200
+    system_prompt = captured["messages"][0]["content"]
+    assert "文档摘要" in system_prompt
+    assert "提出自注意力机制，可并行训练" in system_prompt
+    assert any("（文档摘要）" in label for label in response.json()["source_chunks"])
+
+
 def test_worker_requeues_owned_document_and_returns_task_status(client, monkeypatch, db_session):
     token = _create_user_and_login(client, "worker")
     user_id = int(
