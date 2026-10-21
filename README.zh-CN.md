@@ -19,9 +19,10 @@
 - `Redis 滑动窗口限流` 保护聊天接口，Redis 不可用时自动降级
 - `SSE 流式输出` Chat 与 RAG 均支持；聊天前端流式优先，需要工具的回合由后端透明转交非流式工具链
 - `多轮对话记忆` 聊天与 RAG 均支持 session_id 管理对话上下文（Redis 会话存储）
+- **会话持久化** — 聊天记录按会话存 PostgreSQL，上下文互相隔离，标题按首条消息自动生成，刷新/断线后可恢复
 - **BYOK 成本治理** — 定价中心、按用户月度预算（到期自动重置）、云端→本地降级链、语义缓存（相似问题免调用并量化节省金额）、闲时批量任务调度（百炼闲时窗口跑批）
 - `GitHub Actions CI` PostgreSQL 集成测试 + Docker 构建验证
-- `197 个单元测试` + pre-commit hooks（ruff lint/format）
+- `216 个单元测试` + pre-commit hooks（ruff lint/format）
 - **Mock 模式自动启用** — 无需 API Key，`LLM_API_KEY` 为空时自动切换 Mock 模式
 - **`make setup` 一键启动** — 自动生成 SECRET_KEY、灌入 demo 数据、拉取 Ollama 模型
 - **Docker Compose Profile 分层** — 核心 4 容器默认启动，`--profile full` 加 Ollama，`--profile monitor` 加监控（Grafana/Prometheus/Flower）
@@ -127,7 +128,8 @@ flowchart LR
 ### 7. 前端 SPA
 - **登录/注册** — JWT Token 持久化，邮箱密码登录或直接粘贴 Token
 - **AI 对话** — 流式优先（长回答首 token 约 1~2 秒出现）、Markdown 展示、多轮上下文记忆、Tool Calling 卡片，流式无内容时自动回退非流式
-- **知识库管理** — 上传 `.txt/.md/.pdf`、文档状态指示灯（处理中每 3 秒自动轮询，无需手动刷新）、RAG 搜索查询
+- **会话管理** — 侧边栏会话列表，新建/切换/删除，每个会话独立上下文，标题自动生成，刷新后恢复上次会话
+- **知识库管理** — 上传 `.txt/.md/.pdf/.docx/.pptx`、文档状态指示灯（处理中每 3 秒自动轮询，无需手动刷新）、RAG 搜索查询
 - **任务管理** — 状态过滤、点击切换状态（待办→进行中→已完成）、创建/删除
 - **用户设置** — 多厂商 LLM 配置（OpenAI/DeepSeek/Ollama 等）、月度成本预算（本月已花/剩余）、密码修改
 - **可观测性面板** — 统计卡片（含人民币成本与缓存节省）、折线图（Calls/Token 趋势）、端点柱状图、LLM 调用日志详情 Modal
@@ -399,7 +401,7 @@ curl "http://localhost:8000/api/v1/observability/llm-stats?days=7" \
 ## 测试与验证
 
 ```bash
-# 运行全部 197 个单元测试
+# 运行全部 216 个单元测试
 python3 -m pytest -q
 
 # 带覆盖率报告
