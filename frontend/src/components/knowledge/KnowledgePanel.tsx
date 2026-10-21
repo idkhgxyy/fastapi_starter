@@ -4,6 +4,10 @@ import { listDocuments, uploadDocument, deleteDocument, searchKnowledgeBase, typ
 import { IconFile, IconUpload, IconTrash, IconSearch, IconRefresh, IconX } from '@/components/ui/Icons'
 import { statusLabels, statusColors } from '@/components/knowledge/constants'
 
+// 文档解析/向量化是异步任务：上传后状态会先 queued 再 processing。
+// 不轮询的话列表会一直停在"排队中"，必须手动刷新才能看到 ready。
+const POLL_INTERVAL_MS = 3000
+
 export default function KnowledgePanel() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
@@ -14,6 +18,11 @@ export default function KnowledgePanel() {
   const [querying, setQuerying] = useState(false)
   const [queryError, setQueryError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const pollInFlight = useRef(false)
+
+  const hasPendingDocuments = documents.some(
+    (doc) => doc.status === 'queued' || doc.status === 'processing'
+  )
 
   async function loadDocs() {
     setError('')
@@ -30,6 +39,23 @@ export default function KnowledgePanel() {
   useEffect(() => {
     loadDocs()
   }, [])
+
+  // 只要还有文档在处理，就自动轮询；全部结束（ready/failed）后自动停
+  useEffect(() => {
+    if (!hasPendingDocuments) return
+
+    const timer = window.setInterval(async () => {
+      if (pollInFlight.current) return
+      pollInFlight.current = true
+      try {
+        await loadDocs()
+      } finally {
+        pollInFlight.current = false
+      }
+    }, POLL_INTERVAL_MS)
+
+    return () => window.clearInterval(timer)
+  }, [documents])
 
   async function handleUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -144,12 +170,20 @@ export default function KnowledgePanel() {
           <span className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
             文档列表
           </span>
-          <button
-            onClick={loadDocs}
-            className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
-          >
-            <IconRefresh />
-          </button>
+          <div className="flex items-center gap-2">
+            {hasPendingDocuments && (
+              <span className="text-xs text-[var(--text-tertiary)] flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
+                处理中，自动刷新
+              </span>
+            )}
+            <button
+              onClick={loadDocs}
+              className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
+            >
+              <IconRefresh />
+            </button>
+          </div>
         </div>
 
         {loading ? (
