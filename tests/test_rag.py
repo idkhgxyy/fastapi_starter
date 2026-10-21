@@ -542,3 +542,87 @@ def test_rag_query_budget_blocked(client, db_session):
     assert resp.status_code == 402
     assert "成本熔断" in str(resp.json())
     settings.LLM_BUDGET_CNY = old_budget
+
+
+def test_rag_query_stream_budget_blocked(client, db_session):
+    """/rag/query/stream 同样受成本熔断约束，且必须在建立流之前拒绝。"""
+    from app.core.config import settings
+    from app.models.llm_call_log import LLMCallLog
+
+    old_budget = settings.LLM_BUDGET_CNY
+    settings.LLM_BUDGET_CNY = 0.0001
+    try:
+        client.post(
+            "/api/v1/users/",
+            json={
+                "username": "ragstreambudget",
+                "email": "ragstreambudget@test.dev",
+                "password": "testpassword",
+            },
+        )
+        login = client.post(
+            "/api/v1/auth/login",
+            data={"username": "ragstreambudget@test.dev", "password": "testpassword"},
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        user_id = client.get("/api/v1/users/me", headers=headers).json()["id"]
+
+        db_session.add(
+            LLMCallLog(
+                user_id=user_id,
+                endpoint="/api/v1/chat",
+                model_name="deepseek-v4.1-flash",
+                provider="custom",
+                prompt="hi",
+                response="x",
+                prompt_tokens=1_000_000,
+                completion_tokens=0,
+                total_tokens=1_000_000,
+                latency_ms=1.0,
+                estimated_cost_usd=0.0,
+                status="success",
+            )
+        )
+        db_session.commit()
+
+        resp = client.post("/api/v1/rag/query/stream", json={"query": "测试"}, headers=headers)
+        assert resp.status_code == 402
+        assert "成本熔断" in str(resp.json())
+    finally:
+        settings.LLM_BUDGET_CNY = old_budget
+
+
+def test_rag_query_stream_cache_hit_skips_llm(client, monkeypatch):
+    """流式接口命中语义缓存时直接回放，不产生 LLM 调用。"""
+    import app.api.routers.rag as rag_router
+
+    token = _create_user_and_login(client, "stream-cache")
+
+    class FakeEntry:
+        answer = "这是缓存里的历史回答"
+        original_cost_cny = 0.006
+
+    async def fake_lookup(db, user_id, question):
+        return FakeEntry(), 0.98
+
+    called = {"llm": False}
+
+    def fake_get_llm_client(user=None):
+        called["llm"] = True
+        raise AssertionError("命中缓存时不应获取 LLM 客户端")
+
+    monkeypatch.setattr(rag_router, "lookup_semantic_cache", fake_lookup)
+    monkeypatch.setattr(rag_router, "get_llm_client", fake_get_llm_client)
+
+    with client.stream(
+        "POST",
+        "/api/v1/rag/query/stream",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"query": "缓存问题", "top_k": 3},
+    ) as resp:
+        assert resp.status_code == 200
+        content = resp.read().decode("utf-8")
+
+    assert "缓存命中" in content
+    assert "这是缓存里的历史回答" in content
+    assert called["llm"] is False

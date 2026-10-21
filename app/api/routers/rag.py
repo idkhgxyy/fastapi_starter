@@ -26,6 +26,11 @@ SUPPORTED_EXTENSIONS = get_supported_extensions()
 SUPPORTED_EXT_TEXT = ", ".join(SUPPORTED_EXTENSIONS)
 
 
+def _sse(payload: dict) -> str:
+    """把 dict 包装成一条 SSE data 帧。"""
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
 @router.post(
     "/upload",
     response_model=DocumentResponse,
@@ -303,8 +308,34 @@ async def query_knowledge_base_stream(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_active_user),
 ):
+    """
+    与阻塞接口同标准：预算熔断 + 语义缓存 + 定价中心记账。
+
+    注意：预算必须在建立流之前判断（流一旦开始推送就无法再回 402），
+    而记账/缓存/历史必须放在 [DONE] 之前——客户端收到 DONE 会立即断开，
+    Starlette 随之取消本生成器，放在 DONE 之后的 await 型收尾会被截断。
+    """
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
+
+    # 成本熔断：预算触顶直接拒绝，不产生 embedding / LLM 调用
+    budget = check_budget(db, current_user.id)
+    if not budget.allowed:
+        raise HTTPException(status_code=402, detail=budget_reject_message(budget))
+
+    # 语义缓存：命中则回放历史答案，不调 LLM
+    cache_hit = await lookup_semantic_cache(db, current_user.id, request.query)
+    if cache_hit is not None:
+        entry, similarity = cache_hit
+        note = f"（缓存命中 · 相似度 {similarity:.0%} · 已节省 ¥{entry.original_cost_cny:.4f}）\n\n"
+
+        async def _replay():
+            yield _sse({"content": note})
+            yield _sse({"content": entry.answer})
+            yield _sse({"source_chunks": []})
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(_replay(), media_type="text/event-stream")
 
     rag_service = RAGService(db)
     knowledge = await rag_service.build_knowledge_context(
@@ -321,14 +352,7 @@ async def query_knowledge_base_stream(
         )
 
         async def _empty():
-            data = json.dumps(
-                {
-                    "content": empty_answer,
-                    "source_chunks": [],
-                },
-                ensure_ascii=False,
-            )
-            yield f"data: {data}\n\n"
+            yield _sse({"content": empty_answer, "source_chunks": []})
             yield "data: [DONE]\n\n"
 
         return StreamingResponse(_empty(), media_type="text/event-stream")
@@ -340,10 +364,12 @@ async def query_knowledge_base_stream(
     )
 
     source_chunk_contents = knowledge.source_labels()
+    started_at = start_timer()
 
     async def _stream():
         llm_info = get_llm_client(current_user)
         full_response = ""
+        prompt_tokens = completion_tokens = total_tokens = 0
 
         stream_messages = [
             {"role": "system", "content": system_prompt},
@@ -365,24 +391,73 @@ async def query_knowledge_base_stream(
                 messages=stream_messages,
                 temperature=0.1,
                 stream=True,
+                # 末尾 chunk 携带 usage，用于记账与成本统计
+                stream_options={"include_usage": True},
             )
             async for chunk in response:
+                if getattr(chunk, "usage", None):
+                    prompt_tokens = getattr(chunk.usage, "prompt_tokens", 0) or 0
+                    completion_tokens = getattr(chunk.usage, "completion_tokens", 0) or 0
+                    total_tokens = getattr(chunk.usage, "total_tokens", 0) or 0
+
                 if chunk.choices and chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
                     full_response += content
-                    data = json.dumps({"content": content}, ensure_ascii=False)
-                    yield f"data: {data}\n\n"
+                    yield _sse({"content": content})
 
+            # ---- 收尾必须全部在 [DONE] 之前 ----
             if request.session_id and full_response:
                 await append_session_message(
                     current_user.id, request.session_id, "assistant", full_response
                 )
 
-            data = json.dumps({"source_chunks": source_chunk_contents}, ensure_ascii=False)
-            yield f"data: {data}\n\n"
+            cost_cny = estimate_cost_cny(db, llm_info.model_name, prompt_tokens, completion_tokens)
+            create_llm_call_log(
+                db,
+                user_id=current_user.id,
+                endpoint="/api/v1/rag/query/stream",
+                prompt=request.query,
+                response=full_response or None,
+                tool_calls=None,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                latency_ms=elapsed_ms(started_at),
+                status="success",
+                model_name=llm_info.model_name,
+                provider="rag_query",
+            )
+            if full_response:
+                await store_semantic_cache(
+                    db,
+                    current_user.id,
+                    request.query,
+                    full_response,
+                    llm_info.model_name,
+                    prompt_tokens,
+                    completion_tokens,
+                    cost_cny,
+                )
+
+            yield _sse({"source_chunks": source_chunk_contents})
             yield "data: [DONE]\n\n"
         except Exception as e:
-            data = json.dumps({"error": str(e)}, ensure_ascii=False)
-            yield f"data: {data}\n\n"
+            create_llm_call_log(
+                db,
+                user_id=current_user.id,
+                endpoint="/api/v1/rag/query/stream",
+                prompt=request.query,
+                response=None,
+                tool_calls=None,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                latency_ms=elapsed_ms(started_at),
+                status="failed",
+                error_message=str(e),
+                model_name=llm_info.model_name,
+                provider="rag_query",
+            )
+            yield _sse({"error": str(e)})
 
     return StreamingResponse(_stream(), media_type="text/event-stream")
