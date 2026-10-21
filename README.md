@@ -21,7 +21,7 @@ A production-grade full-stack AI Agent system built with **FastAPI + React + Pos
 - `Multi-turn conversation` — RAG supports session-based context via `session_id`
 - **BYOK cost governance** — pricing center, per-user monthly budget (auto-reset), cloud→local fallback chain, semantic cache (similar questions skip the LLM and report the amount saved), off-peak batch scheduling
 - `GitHub Actions CI` PostgreSQL integration tests + Docker build verification
-- `195 unit tests` + pre-commit hooks (ruff lint/format)
+- `197 unit tests` + pre-commit hooks (ruff lint/format)
 - **Auto Mock mode** — no API Key? No problem. System auto-enables Mock mode when `LLM_API_KEY` is empty
 - **`make setup` one-click start** — auto-generates SECRET_KEY, seeds demo data, pulls Ollama models
 - **Docker Compose Profiles** — core 4 containers by default, `--profile full` adds Ollama, `--profile monitor` adds Grafana/Prometheus/Flower
@@ -396,7 +396,7 @@ Each LLM invocation records:
 ## Testing
 
 ```bash
-# Run all 195 unit tests
+# Run all 197 unit tests
 python3 -m pytest -q
 
 # With coverage report

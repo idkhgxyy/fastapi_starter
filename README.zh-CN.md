@@ -21,7 +21,7 @@
 - `多轮对话记忆` 聊天与 RAG 均支持 session_id 管理对话上下文（Redis 会话存储）
 - **BYOK 成本治理** — 定价中心、按用户月度预算（到期自动重置）、云端→本地降级链、语义缓存（相似问题免调用并量化节省金额）、闲时批量任务调度（百炼闲时窗口跑批）
 - `GitHub Actions CI` PostgreSQL 集成测试 + Docker 构建验证
-- `195 个单元测试` + pre-commit hooks（ruff lint/format）
+- `197 个单元测试` + pre-commit hooks（ruff lint/format）
 - **Mock 模式自动启用** — 无需 API Key，`LLM_API_KEY` 为空时自动切换 Mock 模式
 - **`make setup` 一键启动** — 自动生成 SECRET_KEY、灌入 demo 数据、拉取 Ollama 模型
 - **Docker Compose Profile 分层** — 核心 4 容器默认启动，`--profile full` 加 Ollama，`--profile monitor` 加监控（Grafana/Prometheus/Flower）
@@ -399,7 +399,7 @@ curl "http://localhost:8000/api/v1/observability/llm-stats?days=7" \
 ## 测试与验证
 
 ```bash
-# 运行全部 195 个单元测试
+# 运行全部 197 个单元测试
 python3 -m pytest -q
 
 # 带覆盖率报告
