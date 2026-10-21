@@ -17,13 +17,17 @@ from app.services.llm_service import get_llm_client
 from app.services.pricing_service import estimate_cost_cny
 from app.services.rag_service import RAGService, append_session_message, load_session_history
 from app.services.semantic_cache import lookup_semantic_cache, store_semantic_cache
-from app.utils.file_parser import get_supported_extensions, parse_file
+from app.utils.file_parser import get_supported_extensions, legacy_office_error_message, parse_file
 from app.worker.tasks import process_document_task
 
 router = APIRouter()
 
 SUPPORTED_EXTENSIONS = get_supported_extensions()
 SUPPORTED_EXT_TEXT = ", ".join(SUPPORTED_EXTENSIONS)
+
+# 单个文件上限。pptx/docx 动辄几十 MB，不设限的话一次上传就能把 2G 机器的
+# api 容器内存打满（解析时整个文件会读进内存）。
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
 
 def _sse(payload: dict) -> str:
@@ -35,7 +39,7 @@ def _sse(payload: dict) -> str:
     "/upload",
     response_model=DocumentResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="上传文档并异步构建知识库（支持 .txt / .md / .pdf）",
+    summary="上传文档并异步构建知识库（支持 .txt / .md / .pdf / .docx / .pptx）",
     tags=["RAG"],
 )
 async def upload_document(
@@ -44,7 +48,8 @@ async def upload_document(
     current_user=Depends(get_current_active_user),
 ):
     """
-    上传文档（支持 .txt / .md / .pdf），先解析并保存纯文本内容，再异步执行切分和向量化。
+    上传文档（支持 .txt / .md / .pdf / .docx / .pptx），先解析并保存纯文本内容，
+    再异步执行切分和向量化。.doc / .ppt 老格式会返回需要另存为新格式的提示。
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided.")
@@ -53,13 +58,27 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="Filename too long (max 255 characters).")
 
     name_lower = file.filename.lower()
+
+    # 老格式先单独拦：否则会落到下面的白名单分支，用户只看到 "Unsupported file type"
+    legacy_message = legacy_office_error_message(file.filename)
+    if legacy_message:
+        raise HTTPException(status_code=400, detail=legacy_message)
+
     if not any(name_lower.endswith(ext) for ext in SUPPORTED_EXTENSIONS):
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported file type. Supported: {SUPPORTED_EXT_TEXT}",
         )
 
-    raw_bytes = await file.read()
+    # 只读到上限+1 字节，既能把超限文件挡掉，又不会把整个大文件塞进内存
+    raw_bytes = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(raw_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            # 用字面量而不是 status.HTTP_413_*：该常量在新版 Starlette 里改了名，
+            # 固定数字可同时兼容 requirements 允许的旧版本
+            status_code=413,
+            detail=f"文件过大：单个文件上限 {MAX_UPLOAD_BYTES // (1024 * 1024)}MB。",
+        )
 
     try:
         parsed = parse_file(file.filename, raw_bytes)

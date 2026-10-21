@@ -57,6 +57,74 @@ def test_upload_document_creates_async_job(client, monkeypatch, db_session):
     assert document.file_type == "txt"
 
 
+def test_upload_docx_document(client, monkeypatch):
+    token = _create_user_and_login(client, "upload-docx")
+
+    class DummyTask:
+        id = "task-rag-docx"
+
+    monkeypatch.setattr(
+        "app.api.routers.rag.process_document_task.delay",
+        lambda document_id: DummyTask(),
+    )
+
+    import io
+
+    from docx import Document as DocxDocument
+
+    buf = io.BytesIO()
+    document = DocxDocument()
+    document.add_paragraph("雅思写作 task 2 结构")
+    document.save(buf)
+
+    response = client.post(
+        "/api/v1/rag/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={
+            "file": (
+                "ielts.docx",
+                buf.getvalue(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["file_type"] == "docx"
+    assert payload["status"] == DOCUMENT_STATUS_QUEUED
+
+
+def test_upload_legacy_doc_returns_actionable_hint(client):
+    """老格式必须给出"另存为 docx"这种可操作提示，而不是笼统的不支持。"""
+    token = _create_user_and_login(client, "upload-legacy-doc")
+
+    response = client.post(
+        "/api/v1/rag/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("ielts.doc", b"legacy binary", "application/msword")},
+    )
+
+    assert response.status_code == 400
+    assert "另存为 .docx" in str(response.json())
+
+
+def test_upload_rejects_oversized_file(client, monkeypatch):
+    import app.api.routers.rag as rag_router
+
+    token = _create_user_and_login(client, "upload-big")
+    monkeypatch.setattr(rag_router, "MAX_UPLOAD_BYTES", 16)
+
+    response = client.post(
+        "/api/v1/rag/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("big.txt", b"x" * 64, "text/plain")},
+    )
+
+    assert response.status_code == 413
+    assert "文件过大" in str(response.json())
+
+
 def test_query_knowledge_base_uses_current_user_scope(client, monkeypatch, db_session):
     token = _create_user_and_login(client, "query")
     user_id = int(

@@ -8,6 +8,15 @@ import { statusLabels, statusColors } from '@/components/knowledge/constants'
 // 不轮询的话列表会一直停在"排队中"，必须手动刷新才能看到 ready。
 const POLL_INTERVAL_MS = 3000
 
+const ACCEPTED_EXTENSIONS = '.txt,.md,.pdf,.docx,.pptx'
+
+// 后端对 .doc/.ppt 和超限文件会返回可操作的中文提示，别再吞成"上传失败，请重试"
+function apiErrorMessage(err: unknown, fallback: string): string {
+  const data = (err as { response?: { data?: { detail?: unknown; msg?: unknown } } })?.response?.data
+  const message = data?.detail ?? data?.msg
+  return typeof message === 'string' && message ? message : fallback
+}
+
 export default function KnowledgePanel() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,8 +38,8 @@ export default function KnowledgePanel() {
     try {
       const data = await listDocuments()
       setDocuments(data)
-    } catch {
-      setError('加载文档失败')
+    } catch (err) {
+      setError(apiErrorMessage(err, '加载文档失败'))
     } finally {
       setLoading(false)
     }
@@ -65,8 +74,8 @@ export default function KnowledgePanel() {
     try {
       await uploadDocument(file)
       await loadDocs()
-    } catch {
-      setError('上传失败，请重试')
+    } catch (err) {
+      setError(apiErrorMessage(err, '上传失败，请重试'))
     }
     if (fileRef.current) fileRef.current.value = ''
     setUploading(false)
@@ -77,8 +86,8 @@ export default function KnowledgePanel() {
     try {
       await deleteDocument(id)
       await loadDocs()
-    } catch {
-      setError('删除失败，请重试')
+    } catch (err) {
+      setError(apiErrorMessage(err, '删除失败，请重试'))
     }
   }
 
@@ -91,8 +100,8 @@ export default function KnowledgePanel() {
       const result = await searchKnowledgeBase(query.trim())
       setQueryResult(result.results)
       if (result.results.length === 0) setQueryError('没有找到相关片段，试试换个说法')
-    } catch {
-      setQueryError('搜索失败，请重试')
+    } catch (err) {
+      setQueryError(apiErrorMessage(err, '搜索失败，请重试'))
     } finally {
       setQuerying(false)
     }
@@ -104,7 +113,7 @@ export default function KnowledgePanel() {
         <input
           ref={fileRef}
           type="file"
-          accept=".txt,.md,.pdf"
+          accept={ACCEPTED_EXTENSIONS}
           onChange={handleUpload}
           className="hidden"
         />
@@ -117,7 +126,7 @@ export default function KnowledgePanel() {
           <p className="text-sm text-[var(--text-tertiary)]">
             {uploading ? '上传中...' : '点击上传文档'}
           </p>
-          <p className="text-xs text-[var(--text-tertiary)] mt-1">支持 .txt .md .pdf</p>
+          <p className="text-xs text-[var(--text-tertiary)] mt-1">支持 .txt .md .pdf .docx .pptx（.doc/.ppt 请另存为新格式）</p>
         </button>
       </div>
 
