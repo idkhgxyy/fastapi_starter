@@ -20,9 +20,10 @@ A production-grade full-stack AI Agent system built with **FastAPI + React + Pos
 - `SSE streaming` for Chat and RAG; the chat frontend streams first, and tool-calling turns are transparently handed to the non-streaming tool chain
 - `Multi-turn conversation` — RAG supports session-based context via `session_id`
 - **Persistent conversations** — chat history stored per conversation in PostgreSQL, isolated context, auto titles, restored after refresh or reconnect
+- **Goal-driven agent tasks** — describe a goal, let a background pipeline turn your knowledge base into a Markdown deliverable you can download
 - **BYOK cost governance** — pricing center, per-user monthly budget (auto-reset), cloud→local fallback chain, semantic cache (similar questions skip the LLM and report the amount saved), off-peak batch scheduling
 - `GitHub Actions CI` PostgreSQL integration tests + Docker build verification
-- `216 unit tests` + pre-commit hooks (ruff lint/format)
+- `228 unit tests` + pre-commit hooks (ruff lint/format)
 - **Auto Mock mode** — no API Key? No problem. System auto-enables Mock mode when `LLM_API_KEY` is empty
 - **`make setup` one-click start** — auto-generates SECRET_KEY, seeds demo data, pulls Ollama models
 - **Docker Compose Profiles** — core 4 containers by default, `--profile full` adds Ollama, `--profile monitor` adds Grafana/Prometheus/Flower
@@ -122,9 +123,19 @@ Every LLM call (including fallbacks, cache misses, and batch jobs) is written to
 - LLM call logging with multi-dimensional stats (by day / endpoint / user)
 - Structured JSON logging (optional)
 
-### 7. Frontend SPA
+### 7. Goal-Driven Agent Tasks
+- Describe a goal (e.g. "write a topic analysis from my course-design materials")
+- Pick the material scope: all ready documents, or a hand-picked subset
+- Background Celery pipeline: `retrieve` (summaries + relevant chunks) → `outline` → `write` (one call per section) → `finalize`
+- Output is a Markdown report with source labels; preview in-app or download the `.md`
+- Every step is persisted and visible as a timeline; failures keep partial progress and can be retried
+- Cost controls: budget check before creation and before each call, per-task token cap, every call logged in the pricing center
+- Deliberately **not** an autonomous planner — the pipeline is fixed so it stays predictable and cheap
+
+### 8. Frontend SPA
 - **Auth** — JWT persistence, login with email/password or paste token directly
 - **Chat** — streams by default (long answers show their first token in ~1–2 s), Markdown rendering, auto-scroll, ToolCallCard visualization, non-streaming fallback when the stream yields nothing
+- **Goal tasks** — create a goal, choose document scope, watch the step timeline, preview and download the Markdown result
 - **Conversations** — sidebar list with new / switch / delete, context isolated per conversation, auto title from the first message, resumes the last conversation after refresh
 - **Knowledge Base** — upload .txt/.md/.pdf, status lights with 3 s auto-polling until processing finishes, RAG search
 - **Tasks** — status filter, click-to-cycle (pending→in-progress→done), create/delete
@@ -398,7 +409,7 @@ Each LLM invocation records:
 ## Testing
 
 ```bash
-# Run all 216 unit tests
+# Run all 228 unit tests
 python3 -m pytest -q
 
 # With coverage report
