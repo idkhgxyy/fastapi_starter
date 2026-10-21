@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { IconChat, IconFile, IconPlus, IconTrash, IconWrench, IconX } from '@/components/ui/Icons'
 import KnowledgePanel from '@/components/knowledge/KnowledgePanel'
 import TasksPanel from '@/components/tasks/TasksPanel'
+import AgentTasksPanel from '@/components/tasks/AgentTasksPanel'
 import { useChatContext } from '@/contexts/ChatContext'
 
 type Tab = 'chats' | 'knowledge' | 'tasks'
 
 export default function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<Tab>('chats')
+  const [taskTab, setTaskTab] = useState<'todo' | 'agent'>('todo')
   const {
     conversations,
     conversationId,
@@ -84,7 +86,33 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
 
         <div className="flex-1 overflow-y-auto p-3">
           {activeTab === 'knowledge' && <KnowledgePanel />}
-          {activeTab === 'tasks' && <TasksPanel />}
+          {activeTab === 'tasks' && (
+            <div className="space-y-3">
+              <div className="flex rounded-lg bg-[var(--bg-tertiary)] p-0.5 text-xs">
+                <button
+                  onClick={() => setTaskTab('todo')}
+                  className={`flex-1 py-1.5 rounded-md transition-colors ${
+                    taskTab === 'todo'
+                      ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm'
+                      : 'text-[var(--text-tertiary)]'
+                  }`}
+                >
+                  待办
+                </button>
+                <button
+                  onClick={() => setTaskTab('agent')}
+                  className={`flex-1 py-1.5 rounded-md transition-colors ${
+                    taskTab === 'agent'
+                      ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm'
+                      : 'text-[var(--text-tertiary)]'
+                  }`}
+                >
+                  目标成果
+                </button>
+              </div>
+              {taskTab === 'todo' ? <TasksPanel /> : <AgentTasksPanel />}
+            </div>
+          )}
           {activeTab === 'chats' && (
             <div className="space-y-2">
               <button

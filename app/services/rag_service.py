@@ -309,9 +309,18 @@ class RAGService:
         return document
 
     async def retrieve_relevant_chunks(
-        self, *, query: str, owner_id: int, top_k: int = 3
+        self,
+        *,
+        query: str,
+        owner_id: int,
+        top_k: int = 3,
+        document_ids: Optional[List[int]] = None,
     ) -> List[DocumentChunk]:
-        """根据 query 检索最相关的 DocumentChunks，并在可用时做重排。"""
+        """根据 query 检索最相关的 DocumentChunks，并在可用时做重排。
+
+        document_ids 为 None 时检索该用户全部文档；传入列表时只在这些文档内检索
+        （Agent 任务的"指定资料范围"用）。
+        """
         if not self.has_ready_documents(owner_id=owner_id):
             return []
 
@@ -330,11 +339,15 @@ class RAGService:
                 .order_by(DocumentChunk.embedding.cosine_distance(query_vector))
                 .limit(recall_k)
             )
+            if document_ids is not None:
+                stmt = stmt.where(Document.id.in_(document_ids))
             result = self.db.execute(stmt)
             candidates = result.scalars().all()
         except Exception:
             # sqlite / 未装 pgvector 扩展的环境：回退 Python 端计算余弦相似度
-            candidates = self._python_fallback_candidates(query_vector, owner_id, recall_k)
+            candidates = self._python_fallback_candidates(
+                query_vector, owner_id, recall_k, document_ids
+            )
 
         if not candidates:
             return []
@@ -357,7 +370,11 @@ class RAGService:
         return [item[0] for item in scored_candidates[:top_k]]
 
     def _python_fallback_candidates(
-        self, query_vector, owner_id: int, recall_k: int
+        self,
+        query_vector,
+        owner_id: int,
+        recall_k: int,
+        document_ids: Optional[List[int]] = None,
     ) -> List[DocumentChunk]:
         """sqlite / 无 pgvector 环境的检索回退：逐条计算余弦相似度取最优。"""
         from app.services.semantic_cache import _cosine_similarity, _parse_embedding
@@ -370,6 +387,8 @@ class RAGService:
                 Document.status == DOCUMENT_STATUS_READY,
             )
         )
+        if document_ids is not None:
+            stmt = stmt.where(Document.id.in_(document_ids))
         scored = []
         for chunk in self.db.execute(stmt).scalars():
             similarity = _cosine_similarity(query_vector, _parse_embedding(chunk.embedding))

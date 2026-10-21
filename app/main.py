@@ -12,6 +12,7 @@ from sqlalchemy import text
 
 from app.api.middleware import RequestIDMiddleware
 from app.api.routers import (
+    agent_tasks,
     auth,
     chat,
     conversations,
@@ -216,6 +217,7 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["Chat"])
 app.include_router(conversations.router, prefix="/api/v1/conversations", tags=["Conversations"])
+app.include_router(agent_tasks.router, prefix="/api/v1/agent-tasks", tags=["Agent Tasks"])
 app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["Tasks"])
 app.include_router(worker.router, prefix="/api/v1/worker", tags=["Worker (Async)"])
 app.include_router(rag.router, prefix="/api/v1/rag", tags=["RAG"])

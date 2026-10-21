@@ -173,3 +173,12 @@ def summarize_pending_documents():
         return {"summarized": summarized, "failed": failed}
     finally:
         db.close()
+
+
+@celery_app.task(name="app.worker.tasks.run_agent_task")
+def run_agent_task_task(task_id: int):
+    """执行目标型 Agent 任务（固定流水线，详见 agent_task_service）。"""
+    logger.info(f"==> 开始执行 Agent 任务 {task_id}")
+    from app.services.agent_task_service import run_task_sync
+
+    run_task_sync(task_id)

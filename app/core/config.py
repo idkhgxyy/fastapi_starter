@@ -73,6 +73,12 @@ class Settings(BaseSettings):
 
     # 闲时批量任务（Celery beat 每天 22:30 北京时间触发，落在百炼闲时窗口）
     SUMMARIZE_MAX_DOCS_PER_RUN: int = 5  # 每轮最多摘要的文档数
+
+    # Agent 任务（目标 → Markdown 成果）：按"固定流水线"生成，控制单任务成本
+    AGENT_TASK_MAX_SECTIONS: int = 5  # 大纲最多几节（每节一次 LLM 调用）
+    AGENT_TASK_MAX_INPUT_CHARS: int = 8000  # 送入模型的目标+材料总长度上限
+    AGENT_TASK_MAX_TOKENS: int = 30000  # 单任务累计 token 上限，超出中止
+    AGENT_TASK_SECTION_MAX_TOKENS: int = 1200  # 单节输出上限
     SUMMARY_MAX_INPUT_CHARS: int = 4000  # 送入 LLM 的文档内容截断长度
 
     @model_validator(mode="after")
