@@ -197,3 +197,21 @@ class TestStreamToolHandoff:
         assert "不应被调用" not in text
         assert delegate_calls == []
         assert stream.closed is False
+
+    def test_done_is_always_the_last_chunk(self):
+        """[DONE] 必须先于收尾工作发出吗？不——必须最后发。
+
+        客户端收到 [DONE] 立即断开、Starlette 随之取消生成器；若把记账/缓存等
+        await 型收尾放在 DONE 之后，它们会在等网络时被取消（线上曾因此缓存恒空）。
+        """
+        stream = _FakeStream([_FakeDelta(content="好")])
+        info = self._fake_info(stream)
+
+        with (
+            patch.object(llm_service, "get_llm_client", lambda user=None: info),
+            patch.object(llm_service, "_build_fallback_info", lambda: None),
+        ):
+            chunks = _collect_stream("你好")
+
+        assert chunks[-1] == "data: [DONE]\n\n"
+        assert all("[DONE]" not in chunk for chunk in chunks[:-1])

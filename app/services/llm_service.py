@@ -844,8 +844,10 @@ async def generate_chat_reply_stream(
             yield "data: [DONE]\n\n"
             return
 
-        yield "data: [DONE]\n\n"
-
+        # ⚠️ 收尾工作（记账 / 历史 / 缓存）必须全部放在 [DONE] 之前。
+        # 客户端收到 [DONE] 就会断开，Starlette 随即取消本生成器；把 await 型收尾
+        # 放在 DONE 之后，缓存写入（要调 embedding 接口）会在等网络时被取消——
+        # 线上实测：日志（毫秒级纯 DB 写）写进去了，缓存却永远为空。
         if db:
             create_llm_call_log(
                 db,
@@ -885,6 +887,8 @@ async def generate_chat_reply_stream(
                 completion_tokens,
                 original_cost,
             )
+
+        yield "data: [DONE]\n\n"
 
     except Exception as e:
         logger.error(f"LLM Stream 调用失败: {str(e)}")
