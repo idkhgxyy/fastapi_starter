@@ -662,7 +662,11 @@ async def generate_chat_reply_stream(
     message: str, db: Session = None, current_user_id: int = None, session_id: str = None
 ):
     """
-    流式调用大语言模型生成回复 (SSE)。不支持 Tool Calling，如果需要 Tool Calling 建议先判断。
+    流式调用大语言模型生成回复 (SSE)。
+
+    本函数自身不做工具编排：探测到模型要调用工具时，会放弃当前流并转交
+    generate_chat_reply（非流式工具链），把最终结果作为 SSE 片段发回。
+    这样前端可以始终走流式，同时不丢工具能力。
 
     可用性策略与非流式一致：预算触顶/未配置 Key 时只尝试本地 Ollama，
     正常调用失败时自动追加本地候选。
@@ -796,6 +800,7 @@ async def generate_chat_reply_stream(
             data = json.dumps({"content": degraded_note}, ensure_ascii=False)
             yield f"data: {data}\n\n"
 
+        tool_call_detected = False
         async for chunk in response:
             # 流式协议中 usage 随空的 choices 附在最后一个 chunk
             if getattr(chunk, "usage", None):
@@ -806,6 +811,15 @@ async def generate_chat_reply_stream(
             delta = chunk.choices[0].delta if chunk.choices else None
             if not delta:
                 continue
+
+            # 模型决定调用工具：本函数不做工具编排（见 docstring），
+            # 放弃这一路，交给非流式的工具链处理，结果仍以 SSE 片段返回。
+            # 代价是这次探路消耗的 prompt token 无法记账（流未跑完拿不到 usage），
+            # 只发生在真的需要工具的请求上，可接受。
+            if getattr(delta, "tool_calls", None):
+                tool_call_detected = True
+                break
+
             payload = {}
             if getattr(delta, "reasoning_content", None):
                 payload["reasoning"] = delta.reasoning_content
@@ -814,6 +828,21 @@ async def generate_chat_reply_stream(
                 payload["content"] = delta.content
             if payload:
                 yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+        if tool_call_detected:
+            logger.info("==> 流式探测到工具调用，转交非流式工具链")
+            try:
+                await response.close()
+            except Exception:
+                pass
+            reply = await generate_chat_reply(
+                message=message, db=db, current_user_id=current_user_id, session_id=session_id
+            )
+            if reply:
+                data = json.dumps({"content": reply}, ensure_ascii=False)
+                yield f"data: {data}\n\n"
+            yield "data: [DONE]\n\n"
+            return
 
         yield "data: [DONE]\n\n"
 

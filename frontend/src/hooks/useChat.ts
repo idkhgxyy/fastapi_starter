@@ -37,80 +37,65 @@ export function useChat() {
     setMessages((prev) => [...prev, userMessage, assistantMessage])
     setIsStreaming(true)
 
+    const patchAssistant = (patch: Partial<Message>) => {
+      setMessages((prev) => {
+        const updated = [...prev]
+        const last = updated[updated.length - 1]
+        if (last?.id === assistantMessage.id) {
+          updated[updated.length - 1] = { ...last, ...patch }
+        }
+        return updated
+      })
+    }
+
     try {
-      // 优先使用非流式请求（支持 Tool Calling），失败后回退到流式
+      // 优先流式：首 token 一两秒内出现，长回答不再干等整个生成过程。
+      // 需要工具调用的请求由后端自动转交非流式工具链，前端无需区分。
+      let fullContent = ''
+      let reasoningContent = ''
+      let streamError: string | null = null
+
+      try {
+        for await (const chunk of streamChatMessage(content.trim(), sessionId)) {
+          if (chunk.error) {
+            streamError = chunk.error
+            break
+          }
+          if (chunk.reasoning) {
+            reasoningContent += chunk.reasoning
+          }
+          if (chunk.content) {
+            fullContent += chunk.content
+          }
+          patchAssistant({
+            content: fullContent,
+            reasoning: reasoningContent || undefined,
+          })
+        }
+      } catch (err) {
+        streamError = err instanceof Error ? err.message : '流式请求失败'
+      }
+
+      // 已经拿到部分内容就不再回退，避免把用户看到的答案覆盖掉
+      if (fullContent) {
+        if (streamError) {
+          patchAssistant({ content: `${fullContent}\n\n（回答中断：${streamError}）` })
+        }
+        return
+      }
+
+      // 流式什么也没拿到（协议不兼容 / 工具链异常）→ 非流式兜底
       try {
         const reply = await sendChatMessage(content.trim(), sessionId)
         if (reply) {
-          setMessages((prev) => {
-            const updated = [...prev]
-            const last = updated[updated.length - 1]
-            if (last?.id === assistantMessage.id) {
-              updated[updated.length - 1] = { ...last, content: reply }
-            }
-            return updated
-          })
+          patchAssistant({ content: reply })
           return
         }
       } catch {
-        // 非流式请求失败，回退到流式
+        // 两条链路都失败，落到下面的统一提示
       }
 
-      // 流式回退
-      const generator = streamChatMessage(content.trim(), sessionId)
-      let fullContent = ''
-      let reasoningContent = ''
-      let hasError = false
-
-      for await (const chunk of generator) {
-        if (chunk.error) {
-          hasError = true
-          setMessages((prev) => {
-            const updated = [...prev]
-            const last = updated[updated.length - 1]
-            if (last?.id === assistantMessage.id) {
-              updated[updated.length - 1] = { ...last, content: `错误：${chunk.error}` }
-            }
-            return updated
-          })
-          break
-        }
-
-        if (chunk.reasoning) {
-          reasoningContent += chunk.reasoning
-        }
-
-        if (chunk.content) {
-          fullContent += chunk.content
-        }
-
-        setMessages((prev) => {
-          const updated = [...prev]
-          const last = updated[updated.length - 1]
-          if (last?.id === assistantMessage.id) {
-            updated[updated.length - 1] = {
-              ...last,
-              content: fullContent,
-              reasoning: reasoningContent || undefined,
-            }
-          }
-          return updated
-        })
-      }
-
-      if (hasError || !fullContent) {
-        setMessages((prev) => {
-          const updated = [...prev]
-          const last = updated[updated.length - 1]
-          if (last?.id === assistantMessage.id && !last.content) {
-            updated[updated.length - 1] = {
-              ...last,
-              content: '请求失败，请重试',
-            }
-          }
-          return updated
-        })
-      }
+      patchAssistant({ content: `错误：${streamError ?? '请求失败，请重试'}` })
     } finally {
       setIsStreaming(false)
     }
