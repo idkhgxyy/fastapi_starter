@@ -15,3 +15,14 @@ frontend/.env.local
 # interview review (local only)
 interview-review/
 papers/
+
+# 本地交接文档：含部署细节与服务器信息，明确不进公开仓库
+HANDOFF.md
+SERVER_MIGRATION.md
+
+# 运行时产物 / 本地测试样本
+celerybeat-schedule
+test_image_pdf.pdf
+
+# macOS
+.DS_Store
