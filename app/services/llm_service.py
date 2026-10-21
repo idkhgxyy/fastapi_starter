@@ -3,7 +3,7 @@ import asyncio
 import json
 import operator
 from dataclasses import dataclass
-from typing import Union
+from typing import Optional, Union
 
 import psutil
 from openai import APIConnectionError, APITimeoutError, AsyncOpenAI, RateLimitError
@@ -20,6 +20,7 @@ from app.core.config import settings
 from app.core.logging import logger
 from app.models.task import Task
 from app.models.user import User
+from app.services import conversation_service
 from app.services.cost_guard import (
     budget_reject_message,
     check_budget,
@@ -358,6 +359,52 @@ async def _save_history_messages(current_user_id: int, session_id: str, messages
         logger.warning(f"保存会话历史失败（不影响本次对话）: {e}")
 
 
+async def _load_chat_history(
+    db: Session,
+    current_user_id: int,
+    conversation_id: Optional[int],
+    session_id: Optional[str],
+) -> list:
+    """持久化会话优先：有 conversation_id 时从数据库读历史，否则退回 Redis session。"""
+    if db is not None and conversation_id is not None:
+        return conversation_service.load_history_for_prompt(
+            db, conversation_id=conversation_id, limit=MAX_HISTORY_MESSAGES
+        )
+    return await _load_history_messages(current_user_id, session_id)
+
+
+async def _save_chat_exchange(
+    db: Session,
+    conversation,
+    current_user_id: int,
+    session_id: Optional[str],
+    user_content: str,
+    assistant_content: str,
+) -> None:
+    """一轮成功问答结束后落库（或退回 Redis）。失败不影响本次对话。"""
+    if db is not None and conversation is not None:
+        try:
+            conversation_service.append_exchange(
+                db,
+                conversation=conversation,
+                user_content=user_content,
+                assistant_content=assistant_content,
+            )
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"会话消息落库失败（不影响本次对话）: {e}")
+        return
+
+    await _save_history_messages(
+        current_user_id,
+        session_id,
+        [
+            {"role": "user", "content": user_content},
+            {"role": "assistant", "content": assistant_content},
+        ],
+    )
+
+
 def _build_fallback_info() -> Union[LLMClientInfo, None]:
     """构建本地 Ollama 降级客户端；Mock 模式或未启用 Ollama 时返回 None"""
     if settings.LLM_MOCK or not settings.OLLAMA_ENABLED:
@@ -373,6 +420,9 @@ async def _generate_chat_reply_with_client(
     session_id: str,
     info: LLMClientInfo,
     provider: str,
+    conversation=None,
+    history: Optional[list] = None,
+    is_first_turn: bool = True,
 ) -> str:
     """使用指定 LLM 客户端生成回复（含 Tool Calling / RAG 上下文 / 多轮历史）。
 
@@ -409,8 +459,8 @@ async def _generate_chat_reply_with_client(
             system_prompt = f"{system_prompt}\n\n{knowledge_context}"
         messages[0]["content"] = system_prompt
 
-        # 注入多轮对话历史，使模型具备上下文记忆
-        history = await _load_history_messages(current_user_id, session_id)
+        # 注入多轮对话历史，使模型具备上下文记忆（历史已由调用方按会话加载）
+        history = history or []
         if history:
             messages = [messages[0]] + history[-MAX_HISTORY_MESSAGES:] + [messages[1]]
 
@@ -507,14 +557,9 @@ async def _generate_chat_reply_with_client(
                     model_name=info.model_name,
                     provider=provider,
                 )
-            if session_id and final_reply:
-                await _save_history_messages(
-                    current_user_id,
-                    session_id,
-                    [
-                        {"role": "user", "content": message},
-                        {"role": "assistant", "content": final_reply},
-                    ],
+            if final_reply and (conversation is not None or session_id):
+                await _save_chat_exchange(
+                    db, conversation, current_user_id, session_id, message, final_reply
                 )
             return final_reply
 
@@ -537,8 +582,9 @@ async def _generate_chat_reply_with_client(
                     model_name=info.model_name,
                     provider=provider,
                 )
-                # 纯对话（未走工具）的回答可缓存：工具回答带时效性，不缓存
-                if final_reply and settings.SEMANTIC_CACHE_ENABLED:
+                # 纯对话（未走工具）的回答可缓存：工具回答带时效性，不缓存。
+                # 只在会话首轮缓存——多轮回答依赖上文，复用会张冠李戴。
+                if is_first_turn and final_reply and settings.SEMANTIC_CACHE_ENABLED:
                     original_cost = estimate_cost_cny(
                         db, info.model_name, total_prompt_tokens, total_completion_tokens
                     )
@@ -552,14 +598,9 @@ async def _generate_chat_reply_with_client(
                         total_completion_tokens,
                         original_cost,
                     )
-            if session_id and final_reply:
-                await _save_history_messages(
-                    current_user_id,
-                    session_id,
-                    [
-                        {"role": "user", "content": message},
-                        {"role": "assistant", "content": final_reply},
-                    ],
+            if final_reply and (conversation is not None or session_id):
+                await _save_chat_exchange(
+                    db, conversation, current_user_id, session_id, message, final_reply
                 )
             return final_reply
 
@@ -586,7 +627,11 @@ async def _generate_chat_reply_with_client(
 
 
 async def generate_chat_reply(
-    message: str, db: Session = None, current_user_id: int = None, session_id: str = None
+    message: str,
+    db: Session = None,
+    current_user_id: int = None,
+    session_id: str = None,
+    conversation=None,
 ) -> str:
     """
     调用大语言模型生成回复 (带 Tool Calling 支持)。
@@ -599,15 +644,26 @@ async def generate_chat_reply(
     budget = check_budget(db, current_user_id) if db else None
     budget_blocked = budget is not None and not budget.allowed
 
-    # 语义缓存：相似问题直接复用历史回答，免调用 LLM
-    if db and not budget_blocked:
+    history = await _load_chat_history(
+        db, current_user_id, conversation.id if conversation else None, session_id
+    )
+    is_first_turn = not history
+
+    # 语义缓存只在会话首轮生效：多轮回答依赖上文，复用会张冠李戴
+    if db and not budget_blocked and is_first_turn:
         cache_hit = await lookup_semantic_cache(db, current_user_id, message)
         if cache_hit is not None:
             entry, similarity = cache_hit
-            return (
+            reply = (
                 f"（缓存命中 · 相似度 {similarity:.0%} · 已节省 ¥{entry.original_cost_cny:.4f}）\n\n"
                 f"{entry.answer}"
             )
+            if conversation is not None:
+                # 存原始答案，不带"缓存命中"前缀，避免污染后续历史
+                await _save_chat_exchange(
+                    db, conversation, current_user_id, session_id, message, entry.answer
+                )
+            return reply
 
     info = get_llm_client(user)
     provider = (user.llm_provider if user else None) or settings.LLM_PROVIDER
@@ -620,7 +676,15 @@ async def generate_chat_reply(
             logger.warning("已达到云端预算，降级到本地模型回答")
             try:
                 reply = await _generate_chat_reply_with_client(
-                    message, db, current_user_id, session_id, fallback, "ollama"
+                    message,
+                    db,
+                    current_user_id,
+                    session_id,
+                    fallback,
+                    "ollama",
+                    conversation=conversation,
+                    history=history,
+                    is_first_turn=is_first_turn,
                 )
                 return f"（提示：已达到云端预算，本次由本地模型 {fallback.model_name} 回答）\n\n{reply}"
             except Exception as e:
@@ -633,7 +697,15 @@ async def generate_chat_reply(
             logger.warning("云端 Key 未配置，降级到本地模型回答")
             try:
                 reply = await _generate_chat_reply_with_client(
-                    message, db, current_user_id, session_id, fallback, "ollama"
+                    message,
+                    db,
+                    current_user_id,
+                    session_id,
+                    fallback,
+                    "ollama",
+                    conversation=conversation,
+                    history=history,
+                    is_first_turn=is_first_turn,
                 )
                 return f"（提示：云端 Key 未配置，本次由本地模型 {fallback.model_name} 回答）\n\n{reply}"
             except Exception as e:
@@ -643,14 +715,30 @@ async def generate_chat_reply(
     # 场景三：正常调用，失败时降级
     try:
         return await _generate_chat_reply_with_client(
-            message, db, current_user_id, session_id, info, provider
+            message,
+            db,
+            current_user_id,
+            session_id,
+            info,
+            provider,
+            conversation=conversation,
+            history=history,
+            is_first_turn=is_first_turn,
         )
     except Exception as e:
         if fallback is not None:
             logger.warning(f"云端调用失败（{str(e)[:200]}），降级到本地模型 {fallback.model_name}")
             try:
                 reply = await _generate_chat_reply_with_client(
-                    message, db, current_user_id, session_id, fallback, "ollama"
+                    message,
+                    db,
+                    current_user_id,
+                    session_id,
+                    fallback,
+                    "ollama",
+                    conversation=conversation,
+                    history=history,
+                    is_first_turn=is_first_turn,
                 )
                 return f"（提示：云端服务暂不可用，本次由本地模型 {fallback.model_name} 回答）\n\n{reply}"
             except Exception as e2:
@@ -659,7 +747,11 @@ async def generate_chat_reply(
 
 
 async def generate_chat_reply_stream(
-    message: str, db: Session = None, current_user_id: int = None, session_id: str = None
+    message: str,
+    db: Session = None,
+    current_user_id: int = None,
+    session_id: str = None,
+    conversation=None,
 ):
     """
     流式调用大语言模型生成回复 (SSE)。
@@ -679,8 +771,13 @@ async def generate_chat_reply_stream(
     budget = check_budget(db, current_user_id) if db else None
     budget_blocked = budget is not None and not budget.allowed
 
-    # 语义缓存：相似问题直接复用历史回答
-    if db and not budget_blocked:
+    history = await _load_chat_history(
+        db, current_user_id, conversation.id if conversation else None, session_id
+    )
+    is_first_turn = not history
+
+    # 语义缓存只在会话首轮生效：多轮回答依赖上文，复用会张冠李戴
+    if db and not budget_blocked and is_first_turn:
         cache_hit = await lookup_semantic_cache(db, current_user_id, message)
         if cache_hit is not None:
             entry, similarity = cache_hit
@@ -689,6 +786,11 @@ async def generate_chat_reply_stream(
             yield f"data: {data}\n\n"
             data = json.dumps({"content": entry.answer}, ensure_ascii=False)
             yield f"data: {data}\n\n"
+            # 缓存命中也算一轮问答：先落库，再发 DONE（DONE 之后会被取消）
+            if conversation is not None:
+                await _save_chat_exchange(
+                    db, conversation, current_user_id, session_id, message, entry.answer
+                )
             yield "data: [DONE]\n\n"
             return
 
@@ -746,7 +848,6 @@ async def generate_chat_reply_stream(
         {"role": "system", "content": system_content},
         {"role": "user", "content": message},
     ]
-    history = await _load_history_messages(current_user_id, session_id)
     if history:
         messages = [base_messages[0]] + history[-MAX_HISTORY_MESSAGES:] + [base_messages[1]]
     else:
@@ -865,17 +966,12 @@ async def generate_chat_reply_stream(
                 provider=provider,
             )
         full_content = "".join(content_parts)
-        if session_id and full_content:
-            await _save_history_messages(
-                current_user_id,
-                session_id,
-                [
-                    {"role": "user", "content": message},
-                    {"role": "assistant", "content": full_content},
-                ],
+        if full_content and (conversation is not None or session_id):
+            await _save_chat_exchange(
+                db, conversation, current_user_id, session_id, message, full_content
             )
-        # 流式回答也可缓存（流式链路无工具调用）
-        if db and full_content and settings.SEMANTIC_CACHE_ENABLED:
+        # 流式回答也可缓存，但只在会话首轮（多轮回答依赖上文）
+        if db and is_first_turn and full_content and settings.SEMANTIC_CACHE_ENABLED:
             original_cost = estimate_cost_cny(db, info.model_name, prompt_tokens, completion_tokens)
             await store_semantic_cache(
                 db,

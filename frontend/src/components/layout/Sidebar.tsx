@@ -1,12 +1,27 @@
 import { useState } from 'react'
-import { IconFile, IconWrench, IconX } from '@/components/ui/Icons'
+import { IconChat, IconFile, IconPlus, IconTrash, IconWrench, IconX } from '@/components/ui/Icons'
 import KnowledgePanel from '@/components/knowledge/KnowledgePanel'
 import TasksPanel from '@/components/tasks/TasksPanel'
+import { useChatContext } from '@/contexts/ChatContext'
 
-type Tab = 'knowledge' | 'tasks'
+type Tab = 'chats' | 'knowledge' | 'tasks'
 
 export default function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [activeTab, setActiveTab] = useState<Tab>('knowledge')
+  const [activeTab, setActiveTab] = useState<Tab>('chats')
+  const {
+    conversations,
+    conversationId,
+    loadingConversations,
+    conversationsError,
+    selectConversation,
+    newConversation,
+    removeConversation,
+  } = useChatContext()
+
+  const handleSelect = async (id: number) => {
+    await selectConversation(id)
+    onClose()
+  }
 
   return (
     <>
@@ -27,8 +42,19 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
       >
         <div className="flex border-b border-[var(--border-primary)]">
           <button
+            onClick={() => setActiveTab('chats')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'chats'
+                ? 'text-brand-500 border-b-2 border-brand-500'
+                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+            }`}
+          >
+            <IconChat />
+            对话
+          </button>
+          <button
             onClick={() => setActiveTab('knowledge')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors ${
+            className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium transition-colors ${
               activeTab === 'knowledge'
                 ? 'text-brand-500 border-b-2 border-brand-500'
                 : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
@@ -39,7 +65,7 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
           </button>
           <button
             onClick={() => setActiveTab('tasks')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors ${
+            className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium transition-colors ${
               activeTab === 'tasks'
                 ? 'text-brand-500 border-b-2 border-brand-500'
                 : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
@@ -57,10 +83,79 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
         </div>
 
         <div className="flex-1 overflow-y-auto p-3">
-          {activeTab === 'knowledge' ? <KnowledgePanel /> : <TasksPanel />}
+          {activeTab === 'knowledge' && <KnowledgePanel />}
+          {activeTab === 'tasks' && <TasksPanel />}
+          {activeTab === 'chats' && (
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  newConversation()
+                  onClose()
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border-primary)] py-2 text-sm text-[var(--text-secondary)] hover:border-brand-500/50 hover:text-brand-500 transition-colors"
+              >
+                <IconPlus />
+                新对话
+              </button>
+
+              {conversationsError && (
+                <p className="text-xs text-[var(--color-error)] px-1">{conversationsError}</p>
+              )}
+
+              {loadingConversations ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-12 rounded-lg bg-[var(--bg-tertiary)] animate-pulse" />
+                  ))}
+                </div>
+              ) : conversations.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-sm text-[var(--text-tertiary)]">暂无历史对话</p>
+                  <p className="text-xs text-[var(--text-tertiary)] mt-1">发一条消息就会自动创建</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {conversations.map((conversation) => (
+                    <div
+                      key={conversation.id}
+                      className={`group flex items-center rounded-lg transition-colors ${
+                        conversation.id === conversationId
+                          ? 'bg-brand-500/10'
+                          : 'hover:bg-[var(--bg-tertiary)]'
+                      }`}
+                    >
+                      <button
+                        onClick={() => handleSelect(conversation.id)}
+                        className="flex-1 min-w-0 text-left px-2.5 py-2"
+                      >
+                        <p
+                          className={`truncate text-sm ${
+                            conversation.id === conversationId
+                              ? 'text-brand-500 font-medium'
+                              : 'text-[var(--text-primary)]'
+                          }`}
+                        >
+                          {conversation.title}
+                        </p>
+                        <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                          {conversation.message_count} 条消息
+                        </p>
+                      </button>
+                      <button
+                        onClick={() => removeConversation(conversation.id)}
+                        title="删除会话"
+                        className="shrink-0 p-1.5 mr-1 rounded text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 hover:text-[var(--color-error)] transition-all"
+                      >
+                        <IconTrash />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </aside>
     </>
   )
 }
-

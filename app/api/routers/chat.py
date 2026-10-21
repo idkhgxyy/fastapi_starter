@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.schemas.chat import ChatRequest, ChatResponse
+from app.services import conversation_service
 from app.services.llm_service import generate_chat_reply, generate_chat_reply_stream
 from app.utils.rate_limit import RateLimiter
 
@@ -23,7 +24,17 @@ async def chat_with_ai(
     """
     基础对话接口（支持 Tool Calling 与 SSE 流式输出）。
     要求用户在 Header 中携带 JWT Token 才能访问。
+
+    传入 conversation_id 时，历史从数据库读写（持久化）；不传则退回 Redis session 机制。
     """
+    conversation = None
+    if request.conversation_id is not None:
+        conversation = conversation_service.get_conversation_for_user(
+            db, conversation_id=request.conversation_id, user_id=current_user.id
+        )
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="Conversation not found.")
+
     if request.stream:
         # 流式返回
         return StreamingResponse(
@@ -32,6 +43,7 @@ async def chat_with_ai(
                 db=db,
                 current_user_id=current_user.id,
                 session_id=request.session_id,
+                conversation=conversation,
             ),
             media_type="text/event-stream",
         )
@@ -42,5 +54,6 @@ async def chat_with_ai(
             db=db,
             current_user_id=current_user.id,
             session_id=request.session_id,
+            conversation=conversation,
         )
         return ChatResponse(reply=reply)

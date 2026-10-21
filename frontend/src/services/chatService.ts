@@ -4,20 +4,27 @@ export interface ChatRequest {
   message: string
   stream: boolean
   session_id?: string | null
+  conversation_id?: number | null
 }
 
-export async function sendChatMessage(message: string, sessionId?: string): Promise<string> {
+export async function sendChatMessage(
+  message: string,
+  sessionId?: string,
+  conversationId?: number | null
+): Promise<string> {
   const response = await api.post<{ reply: string }>('/chat/', {
     message,
     stream: false,
     session_id: sessionId ?? null,
+    conversation_id: conversationId ?? null,
   })
   return response.data.reply
 }
 
 export async function* streamChatMessage(
   message: string,
-  sessionId?: string
+  sessionId?: string,
+  conversationId?: number | null
 ): AsyncGenerator<{
   reasoning?: string
   content?: string
@@ -39,7 +46,12 @@ export async function* streamChatMessage(
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ message, stream: true, session_id: sessionId ?? null }),
+    body: JSON.stringify({
+      message,
+      stream: true,
+      session_id: sessionId ?? null,
+      conversation_id: conversationId ?? null,
+    }),
   })
 
   if (!response.ok) {
