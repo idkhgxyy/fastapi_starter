@@ -84,7 +84,7 @@ flowchart LR
 - Tool Calling can directly create tasks
 
 ### 3. RAG Knowledge Base
-- Upload `.txt` / `.md` / `.pdf` documents
+- Upload `.txt` / `.md` / `.pdf` / `.docx` / `.pptx` documents (20 MB per file; legacy `.doc` / `.ppt` return a hint to re-save in the new format)
 - Tenant-isolated document storage
 - Celery async text chunking and vectorization
 - Cosine similarity search via `pgvector`

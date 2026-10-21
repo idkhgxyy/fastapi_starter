@@ -84,7 +84,7 @@ flowchart LR
 - Tool Calling 可直接创建任务
 
 ### 3. RAG 知识库
-- 上传 `.txt` / `.md` / `.pdf` 多格式文档
+- 上传 `.txt` / `.md` / `.pdf` / `.docx` / `.pptx` 多格式文档（单文件上限 20MB；`.doc` / `.ppt` 老格式会提示另存为新格式）
 - 文档按用户隔离存储
 - Celery 异步执行文本切分与向量化
 - 基于 `pgvector` 的余弦相似度检索
