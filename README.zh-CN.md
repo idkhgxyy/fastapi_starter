@@ -17,11 +17,11 @@
 - `Prometheus + Grafana` 监控请求量、延迟与错误率，预置看板
 - `LLM Observability` 记录 prompt、response、token、耗时、工具调用链、成本估算、错误原因
 - `Redis 滑动窗口限流` 保护聊天接口，Redis 不可用时自动降级
-- `SSE 流式输出` Chat 和 RAG 均支持 Server-Sent Events 流式响应
+- `SSE 流式输出` Chat 与 RAG 均支持；聊天前端流式优先，需要工具的回合由后端透明转交非流式工具链
 - `多轮对话记忆` 聊天与 RAG 均支持 session_id 管理对话上下文（Redis 会话存储）
 - **BYOK 成本治理** — 定价中心、按用户月度预算（到期自动重置）、云端→本地降级链、语义缓存（相似问题免调用并量化节省金额）、闲时批量任务调度（百炼闲时窗口跑批）
 - `GitHub Actions CI` PostgreSQL 集成测试 + Docker 构建验证
-- `166 个单元测试` + pre-commit hooks（ruff lint/format）
+- `195 个单元测试` + pre-commit hooks（ruff lint/format）
 - **Mock 模式自动启用** — 无需 API Key，`LLM_API_KEY` 为空时自动切换 Mock 模式
 - **`make setup` 一键启动** — 自动生成 SECRET_KEY、灌入 demo 数据、拉取 Ollama 模型
 - **Docker Compose Profile 分层** — 核心 4 容器默认启动，`--profile full` 加 Ollama，`--profile monitor` 加监控（Grafana/Prometheus/Flower）
@@ -89,7 +89,8 @@ flowchart LR
 - Celery 异步执行文本切分与向量化
 - 基于 `pgvector` 的余弦相似度检索
 - 可选使用 `BGE-Reranker` 做二次重排（需 `pip install sentence-transformers`）
-- 问答结果附带相关原文片段
+- 问答结果附带相关原文片段，每段标注来源文档
+- **摘要兜底**：问"串讲所有论文"这类全局问题、或一个片段都没检索到时，注入闲时生成的文档摘要——纯向量检索在这类问题上容易被参考文献列表一样的高密度片段抢走 top-k
 - 支持 `session_id` 多轮对话上下文记忆
 
 ### 4. LLM 与 Agent
@@ -97,14 +98,7 @@ flowchart LR
 - 本地 Ollama 或云端大模型灵活切换
 - 多租户 BYOK：每个用户可独立配置自己的 LLM 服务商与 API Key
 - 5 个工具：天气查询、创建任务、系统状态、任务列表、数学计算器
-- 支持 SSE 流式输出
-
-### 4. LLM 与 Agent
-- 统一 OpenAI 兼容适配层
-- 本地 Ollama 或云端大模型灵活切换
-- 多租户 BYOK：每个用户可独立配置自己的 LLM 服务商与 API Key
-- 5 个工具：天气查询、创建任务、系统状态、任务列表、数学计算器
-- 支持 SSE 流式输出
+- 支持 SSE 流式输出（前端流式优先；需要工具的回合由后端转交非流式工具链，再以 SSE 回放）
 - 聊天自动检索用户知识库（RAG 增强回答，无文档用户零开销）
 - 多轮上下文记忆：`session_id` 关联 Redis 会话历史，注入最近 20 轮
 - 混合思考模型适配：思维链流式渲染、批量任务可关闭思考省成本
@@ -118,8 +112,8 @@ flowchart LR
 | **定价中心** | `model_pricings` 表存储各模型单价（元/百万 token），内存缓存 + 全局兜底，幂等种子 | 所有成本计算的唯一价格来源，模型调价只改数据不改代码 |
 | **周期预算** | 用户级月度预算（自然月重置），个人预算优先、回退全局默认 | 达到红线拒绝云端调用，本月已花/剩余实时可见 |
 | **降级链** | 云端失败/预算触顶/未配置 Key 时自动切换本地 Ollama | 省钱与可用性解耦：触顶后服务降级不中断 |
-| **语义缓存** | 问题向量化后检索历史问答，余弦相似度 ≥0.92 直接返回缓存 | 实测同义改写问题以 98% 相似度命中，单次节省完整调用成本，回复标注节省金额 |
-| **闲时调度** | Celery beat 每天 22:30（北京时间）批量生成文档摘要 | 全程落在百炼闲时窗口（22:00~次日 8:00），单价为忙时一半；批量任务关闭思考模式，实测成本降至 1/5 |
+| **语义缓存** | 问题向量化后检索历史问答，余弦相似度超过阈值直接返回缓存 | 实测同义改写问题以 98% 相似度命中，单次节省完整调用成本，回复标注节省金额；阈值随 embedding 模型调整（`text-embedding-v4` 用 0.65，`bge-m3` 用 0.92）；知识库内容变化（新增/删除/重新处理文档、摘要生成）时自动失效该用户缓存 |
+| **闲时调度** | Celery beat 每天 22:30（北京时间）批量生成文档摘要 | 全程落在百炼闲时窗口（22:00~次日 8:00），单价为忙时一半；批量任务关闭思考模式，实测成本降至 1/5；摘要供检索链路做全局问题的兜底上下文 |
 
 所有 LLM 调用（含降级、缓存未命中、闲时批处理）统一记录到 `llm_call_logs`，按定价中心折算人民币成本，可观测性面板展示总花费、缓存命中与累计节省金额。
 
@@ -132,8 +126,8 @@ flowchart LR
 
 ### 7. 前端 SPA
 - **登录/注册** — JWT Token 持久化，邮箱密码登录或直接粘贴 Token
-- **AI 对话** — SSE 流式渲染（含思维链）、Markdown 展示、多轮上下文记忆、Tool Calling 卡片
-- **知识库管理** — 上传 `.txt/.md/.pdf`、文档状态指示灯、RAG 搜索查询
+- **AI 对话** — 流式优先（长回答首 token 约 1~2 秒出现）、Markdown 展示、多轮上下文记忆、Tool Calling 卡片，流式无内容时自动回退非流式
+- **知识库管理** — 上传 `.txt/.md/.pdf`、文档状态指示灯（处理中每 3 秒自动轮询，无需手动刷新）、RAG 搜索查询
 - **任务管理** — 状态过滤、点击切换状态（待办→进行中→已完成）、创建/删除
 - **用户设置** — 多厂商 LLM 配置（OpenAI/DeepSeek/Ollama 等）、月度成本预算（本月已花/剩余）、密码修改
 - **可观测性面板** — 统计卡片（含人民币成本与缓存节省）、折线图（Calls/Token 趋势）、端点柱状图、LLM 调用日志详情 Modal
@@ -213,6 +207,20 @@ docker compose --profile monitor up -d
 # 完整全栈（所有服务）
 docker compose --profile full --profile monitor up -d
 ```
+
+### 轻量部署（无本地模型）
+
+2G 内存的小服务器也能跑全栈，不需要 Ollama：
+
+```bash
+# .env
+OLLAMA_ENABLED=false
+EMBEDDING_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+EMBEDDING_API_KEY=<你的 key>
+EMBEDDING_MODEL_NAME=text-embedding-v4
+```
+
+只启动四个核心容器（实测约 800MB），不要带 `full` profile。此时健康页会把 Ollama 显示为 `disabled`，而不是误报"RAG 不可用"；云端→本地降级链自动跳过。`text-embedding-v4` 输出 1024 维，与 `EMBEDDING_DIMENSION` 一致，pgvector 列无需迁移。
 
 ### Makefile 常用命令
 
@@ -391,7 +399,7 @@ curl "http://localhost:8000/api/v1/observability/llm-stats?days=7" \
 ## 测试与验证
 
 ```bash
-# 运行全部 129 个单元测试
+# 运行全部 195 个单元测试
 python3 -m pytest -q
 
 # 带覆盖率报告

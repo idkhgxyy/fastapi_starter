@@ -17,10 +17,11 @@ A production-grade full-stack AI Agent system built with **FastAPI + React + Pos
 - `Prometheus + Grafana` monitoring for request volume, latency, and error rate
 - `LLM Observability` logging prompt, response, tokens, latency, tool calls, cost estimates, errors
 - `Redis sliding-window rate limiting` on chat endpoints, graceful degradation on Redis failure
-- `SSE streaming` for both Chat and RAG queries
+- `SSE streaming` for Chat and RAG; the chat frontend streams first, and tool-calling turns are transparently handed to the non-streaming tool chain
 - `Multi-turn conversation` — RAG supports session-based context via `session_id`
+- **BYOK cost governance** — pricing center, per-user monthly budget (auto-reset), cloud→local fallback chain, semantic cache (similar questions skip the LLM and report the amount saved), off-peak batch scheduling
 - `GitHub Actions CI` PostgreSQL integration tests + Docker build verification
-- `129 unit tests` + pre-commit hooks (ruff lint/format)
+- `195 unit tests` + pre-commit hooks (ruff lint/format)
 - **Auto Mock mode** — no API Key? No problem. System auto-enables Mock mode when `LLM_API_KEY` is empty
 - **`make setup` one-click start** — auto-generates SECRET_KEY, seeds demo data, pulls Ollama models
 - **Docker Compose Profiles** — core 4 containers by default, `--profile full` adds Ollama, `--profile monitor` adds Grafana/Prometheus/Flower
@@ -88,7 +89,8 @@ flowchart LR
 - Celery async text chunking and vectorization
 - Cosine similarity search via `pgvector`
 - Optional `BGE-Reranker` cross-encoder re-ranking (requires `pip install sentence-transformers`)
-- Responses include relevant source text excerpts
+- Responses include relevant source text excerpts, each labelled with its source document
+- **Summary fallback**: off-peak generated document summaries are injected when the question is knowledge-base-wide (e.g. "walk me through all four papers") or when no chunk is retrieved — vector search alone tends to lose those queries to citation-dense passages
 - `session_id` multi-turn conversation memory
 
 ### 4. LLM & Agent
@@ -96,22 +98,36 @@ flowchart LR
 - Seamless switching between local Ollama and cloud LLMs
 - Multi-Tenant BYOK: each user configures their own LLM provider & API key
 - 5 tools: weather lookup, task creation, system status, task listing, math calculator
-- SSE streaming output
+- SSE streaming output (frontend streams first; tool-calling turns are handed to the non-streaming tool chain and replayed as SSE)
 
-### 5. Observability
+### 5. BYOK Cost Governance
+
+Cloud models bill per token and there is no "stop when the balance runs out" switch — overspending hits real money. Cost governance here is designed from the **user's** side (protecting the user's own API key) and closes the loop in five parts:
+
+| Part | Mechanism | Effect |
+|---|---|---|
+| **Pricing center** | `model_pricings` table stores per-model prices (CNY per 1M tokens); in-memory cache with global fallback; idempotent seeding | Single source of truth for every cost calculation — price changes are data, not code |
+| **Periodic budget** | Per-user monthly budget (resets each calendar month); a user budget overrides the global default | Cloud calls are rejected at the red line; spent/remaining is visible in real time |
+| **Fallback chain** | Automatic switch to local Ollama when the cloud fails, the budget is exhausted, or no key is configured | Cost control is decoupled from availability: the service degrades instead of stopping |
+| **Semantic cache** | Question embedding + cosine similarity against historical Q&A; hits return the cached answer | A paraphrased question hit at 98% similarity in testing; replies report the amount saved. The threshold tracks the embedding model (0.65 for `text-embedding-v4`, 0.92 for `bge-m3`), and the cache is invalidated whenever the knowledge base changes |
+| **Off-peak scheduling** | Celery beat generates document summaries at 22:30 Beijing time | Runs inside the Bailian off-peak window (22:00–08:00) at half price; thinking mode is disabled for batch jobs (measured ~1/5 the cost) |
+
+Every LLM call (including fallbacks, cache misses, and batch jobs) is written to `llm_call_logs` and priced in CNY, so the observability panel can show total spend, cache hits, and cumulative savings.
+
+### 6. Observability
 - `/metrics` exposes Prometheus metrics
 - Grafana Dashboard real-time visualization
 - Request ID tracing (`X-Request-ID` response header)
 - LLM call logging with multi-dimensional stats (by day / endpoint / user)
 - Structured JSON logging (optional)
 
-### 6. Frontend SPA
+### 7. Frontend SPA
 - **Auth** — JWT persistence, login with email/password or paste token directly
-- **Chat** — SSE streaming, Markdown rendering, auto-scroll, ToolCallCard visualization
-- **Knowledge Base** — upload .txt/.md/.pdf, document status indicators, RAG search
+- **Chat** — streams by default (long answers show their first token in ~1–2 s), Markdown rendering, auto-scroll, ToolCallCard visualization, non-streaming fallback when the stream yields nothing
+- **Knowledge Base** — upload .txt/.md/.pdf, status lights with 3 s auto-polling until processing finishes, RAG search
 - **Tasks** — status filter, click-to-cycle (pending→in-progress→done), create/delete
-- **Settings** — multi-provider LLM config (OpenAI/DeepSeek/Ollama etc.), password change
-- **Observability** — stat cards, line charts (calls/tokens), endpoint bar chart, LLM log detail modal
+- **Settings** — multi-provider LLM config (OpenAI/DeepSeek/Ollama etc.), monthly cost budget (spent/remaining), password change
+- **Observability** — stat cards (CNY cost and cache savings included), line charts (calls/tokens), endpoint bar chart, LLM log detail modal
 - **Health** — Database/Redis/Ollama status lights, 10s auto-polling
 - **Mock Mode** — `VITE_USE_MOCK=true` for offline full-feature demo
 
@@ -188,6 +204,20 @@ docker compose --profile monitor up -d
 # Full stack (all services)
 docker compose --profile full --profile monitor up -d
 ```
+
+### Lightweight deployment (no local models)
+
+For low-memory servers (2 GB and up), the stack can run without Ollama:
+
+```bash
+# .env
+OLLAMA_ENABLED=false
+EMBEDDING_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+EMBEDDING_API_KEY=<your key>
+EMBEDDING_MODEL_NAME=text-embedding-v4
+```
+
+Start only the four core containers (~800 MB measured) — leave out the `full` profile. The health page then reports Ollama as `disabled` rather than a misleading "RAG unavailable", and the cloud→local fallback chain is skipped. `text-embedding-v4` returns 1024 dimensions, matching `EMBEDDING_DIMENSION`, so the pgvector column needs no migration.
 
 ### Makefile commands
 
@@ -366,7 +396,7 @@ Each LLM invocation records:
 ## Testing
 
 ```bash
-# Run all 129 unit tests
+# Run all 195 unit tests
 python3 -m pytest -q
 
 # With coverage report
