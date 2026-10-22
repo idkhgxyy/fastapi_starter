@@ -177,7 +177,7 @@ tests/          # Pytest 测试
 scripts/        # 初始化脚本、评测脚本
 ```
 
-> **详细的模块架构与类说明，请参考 [CODE_WIKI.md](docs/CODE_WIKI.md)**
+> **详细的模块架构与类说明，请参考 [ARCHITECTURE.md](docs/ARCHITECTURE.md)**
 
 ## 前置要求
 

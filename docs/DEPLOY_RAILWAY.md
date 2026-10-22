@@ -1,5 +1,7 @@
 # Railway 部署教程
 
+> **历史文档（2026-06）**：当前部署方式见 [ARCHITECTURE.md](ARCHITECTURE.md) 与本地 `HANDOFF.md`。
+
 > 把你的 FastAPI Starter 项目部署到线上，面试官直接点开网址就能用。
 
 ---

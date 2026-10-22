@@ -174,7 +174,7 @@ tests/          # Pytest unit tests
 scripts/        # Bootstrap & eval scripts
 ```
 
-> **Detailed architecture and class docs: [CODE_WIKI.md](docs/CODE_WIKI.md)**
+> **Detailed architecture and module map: [ARCHITECTURE.md](docs/ARCHITECTURE.md)**
 
 ## Prerequisites
 

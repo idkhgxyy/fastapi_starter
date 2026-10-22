@@ -1,3 +1,9 @@
+# FastAPI Starter - Code Wiki（2026-06 历史快照）
+
+> **历史文档**：测试数量、BGE 重排、会话存储等内容已过期。当前架构见 [ARCHITECTURE.md](../ARCHITECTURE.md)，规则见 [AGENTS.md](../../AGENTS.md)。
+>
+> 保留本文用于回顾当时的模块拆分与设计思路。
+
 # FastAPI Starter - Code Wiki
 
 ## 1. 项目概述 (Project Overview)

@@ -1,5 +1,7 @@
 # 项目 MVP 文档
 
+> **历史文档（2026-06）**：现状见 [ARCHITECTURE.md](ARCHITECTURE.md) 与 [AGENTS.md](../AGENTS.md)。
+
 ## 1. 文档目的
 
 这份文档用于定义当前项目在“投递实习 / 展示作品”场景下的最小可行版本（MVP），明确：

@@ -43,7 +43,8 @@ FastAPI + SQLAlchemy 2 + PostgreSQL/pgvector + Redis + Celery/beat + React/Vite�
 默认只读本文件，然后直接看相关代码与测试。
 
 - 部署/线上排障：只读 `HANDOFF.md` 的「当前状态 / 部署 runbook / 未决问题」三节，不要整篇读。
-- 改检索、成本、会话：直接读对应 service 与其测试；`docs/CODE_WIKI.md` 是 2026-06 的历史快照，事实以代码和本文件为准，只按需查单节。
+- 改检索、成本、会话：直接读对应 service 与其测试；需要模块全景时读 `docs/ARCHITECTURE.md`。
+- `docs/archive/CODE_WIKI-2026-06.md` 是 2026-06 的历史快照，事实以代码和本文件为准，不主动读。
 - `docs/` 下 `FRONTEND_PRD.md`、`PROJECT_REVIEW.md`、`IMPROVEMENT_PLAN.md`、`changes.md`、`project_mvp.md`、`DEPLOY_RAILWAY.md` 均为历史文档，不主动读。
 - `README*.md` 面向人，不主动读；需要对外描述时再看。
 - 新的跨会话约束更新本文件；会话进展写 `HANDOFF.md`；不要每次改动都同步 README / CODE_WIKI / changes。

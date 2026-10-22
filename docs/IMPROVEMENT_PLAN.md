@@ -1,5 +1,7 @@
 # FastAPI Starter 改进计划
 
+> **历史文档（2026-06）**：现状见 [ARCHITECTURE.md](ARCHITECTURE.md) 与 [AGENTS.md](../AGENTS.md)。
+
 > 整合自：2026-06-13 全量功能测试 + 代码审查 + 原有 PROJECT_REVIEW.md
 > 测试环境：Docker Compose（API + DB + Redis + Ollama + Worker），前端 Vite Dev Server
 
