@@ -15,6 +15,7 @@ from app.models.document import (
     DOCUMENT_STATUS_QUEUED,
     DOCUMENT_STATUS_READY,
     Document,
+    DocumentChunk,
 )
 from app.models.qa_cache import QACacheEntry
 from app.models.user import User
@@ -205,6 +206,33 @@ class TestRAGDocumentProcessing:
         assert processed.status == DOCUMENT_STATUS_READY
         assert processed.chunks_count > 0
 
+    def test_process_document_prefixes_chunks_with_title(self, db_session):
+        owner = _next_owner()
+        svc = RAGService(db_session)
+        content = (
+            "# 测试岗位\n\n"
+            "## 岗位职责\n\n" + "负责后端服务开发与维护。" * 40 + "\n\n"
+            "## 任职要求\n\n- 熟练掌握 Java 与 Spring Boot\n"
+        )
+        doc = svc.create_document_record(filename="jd.md", content=content, owner_id=owner)
+
+        async def fake_embeddings(texts):
+            return [[0.1] * 1024 for _ in texts]
+
+        with patch.object(svc, "get_embeddings", side_effect=fake_embeddings):
+            asyncio.run(svc.process_document(document_id=doc.id))
+
+        chunks = (
+            db_session.query(DocumentChunk)
+            .filter_by(document_id=doc.id)
+            .order_by(DocumentChunk.chunk_index)
+            .all()
+        )
+        assert len(chunks) > 1
+        assert all(chunk.content.lstrip().startswith("# 测试岗位") for chunk in chunks)
+        requirement_chunk = next(c for c in chunks if "## 任职要求" in c.content)
+        assert requirement_chunk.content.lstrip().startswith("# 测试岗位")
+
 
 def _add_document(db, *, owner, filename, summary=None, status=DOCUMENT_STATUS_READY):
     document = Document(
@@ -229,6 +257,8 @@ class TestGlobalQueryDetection:
             "帮我总结一下知识库",
             "这几篇有什么区别",
             "这两个岗位的技术栈要求有什么差异",
+            "哪份 JD 明确提出 985/211 学历要求",
+            "哪些岗位明确要求 Python",
             "我都有哪些资料",
             "整体梳理一遍",
         ):
@@ -241,6 +271,24 @@ class TestGlobalQueryDetection:
             "如何配置 Redis 连接",
         ):
             assert is_global_query(query) is False
+
+
+class TestMarkdownChunking:
+    def test_requirements_heading_is_not_left_at_chunk_tail(self):
+        svc = RAGService(None)
+        content = (
+            "# 测试岗位\n\n"
+            "- 公司：测试\n"
+            "- 链接：https://example.com/" + "x" * 250 + "\n\n"
+            "## 岗位职责\n\n" + "负责后端服务开发与维护。" * 40 + "\n\n"
+            "## 任职要求\n\n- 熟练掌握 Java 与 Spring Boot\n- 要求 985/211 本科\n"
+        )
+        chunks = svc.text_splitter.split_text(content)
+
+        assert any(chunk.startswith("## 任职要求") for chunk in chunks)
+        assert not any(chunk.rstrip().endswith("## 任职要求") for chunk in chunks)
+        requirement_chunk = next(chunk for chunk in chunks if chunk.startswith("## 任职要求"))
+        assert "985/211" in requirement_chunk
 
 
 class TestKnowledgeContextBuild:

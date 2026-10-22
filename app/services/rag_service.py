@@ -53,6 +53,10 @@ GLOBAL_QUERY_MARKERS = (
     "联系",
     "每篇",
     "各篇",
+    "哪份",
+    "哪篇",
+    "哪个岗位",
+    "哪些岗位",
     "这几篇",
     "这几份",
     "所有",
@@ -123,11 +127,32 @@ def get_reranker():
     return _reranker
 
 
+def _document_title(document: Document) -> str:
+    """取 Markdown 一级标题；没有标题就用文件名兜底。"""
+    for line in document.content.splitlines():
+        text = line.strip()
+        if text.startswith("# "):
+            return text[2:].strip()[:100]
+    return document.filename[:100]
+
+
+def _prefix_chunks_with_title(document: Document, chunks: List[str]) -> List[str]:
+    """给每个片段补上文档标题，让「任职要求」这类片段也能被文档名相关的问题召回。"""
+    prefix = f"# {_document_title(document)}"
+    return [
+        chunk if chunk.lstrip().startswith("# ") else f"{prefix}\n\n{chunk}" for chunk in chunks
+    ]
+
+
 class RAGService:
     def __init__(self, db: Session):
         self.db = db
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500, chunk_overlap=50, separators=["\n\n", "\n", " ", ""]
+            chunk_size=500,
+            chunk_overlap=50,
+            # 优先按 Markdown 标题切分，避免「## 任职要求」被留在上一块尾部、
+            # 要求正文却落到下一块（JD / 简历类文档最容易踩）
+            separators=["\n## ", "\n# ", "\n\n", "\n", " ", ""],
         )
 
     def create_document_record(
@@ -271,7 +296,9 @@ class RAGService:
         """处理已上传文档：切分、生成向量并写入向量表。"""
         document = self.mark_document_processing(document_id=document_id, task_id=task_id)
 
-        chunks = self.text_splitter.split_text(document.content)
+        chunks = _prefix_chunks_with_title(
+            document, self.text_splitter.split_text(document.content)
+        )
         self.db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
         self.db.flush()
 

@@ -214,6 +214,8 @@ async def _call_llm(
         extra_body={"enable_thinking": False},
     )
     content = (response.choices[0].message.content or "").strip()
+    if getattr(response.choices[0], "finish_reason", None) == "length":
+        logger.warning(f"==> Agent 任务步骤 {step.id} 输出达到 max_tokens，可能被截断")
     prompt_tokens, completion_tokens, total_tokens = extract_usage(response)
     cost = estimate_cost_cny(db, info.model_name, prompt_tokens, completion_tokens)
 

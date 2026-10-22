@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     AGENT_TASK_MAX_SECTIONS: int = 5  # 大纲最多几节（每节一次 LLM 调用）
     AGENT_TASK_MAX_INPUT_CHARS: int = 8000  # 送入模型的目标+材料总长度上限
     AGENT_TASK_MAX_TOKENS: int = 30000  # 单任务累计 token 上限，超出中止
-    AGENT_TASK_SECTION_MAX_TOKENS: int = 2200  # 单节输出上限（1200 会截断长节）
+    AGENT_TASK_SECTION_MAX_TOKENS: int = 2800  # 单节输出上限（偏紧会截断长节）
     SUMMARY_MAX_INPUT_CHARS: int = 4000  # 送入 LLM 的文档内容截断长度
 
     @model_validator(mode="after")
