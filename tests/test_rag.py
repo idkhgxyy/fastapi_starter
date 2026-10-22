@@ -203,6 +203,19 @@ def test_rag_query_global_question_injects_summaries(client, monkeypatch, db_ses
             summary="提出自注意力机制，可并行训练",
         )
     )
+    # 老实现只注入前 8 篇摘要，第 9 篇之后会被静默丢弃
+    for index in range(1, 10):
+        db_session.add(
+            Document(
+                owner_id=user_id,
+                filename=f"paper-{index}.pdf",
+                file_type="pdf",
+                content="正文",
+                status=DOCUMENT_STATUS_READY,
+                chunks_count=1,
+                summary=f"第 {index} 篇论文摘要-唯一标记{index}",
+            )
+        )
     db_session.commit()
 
     async def fake_retrieve(_self, *, query, owner_id, top_k):
@@ -240,6 +253,7 @@ def test_rag_query_global_question_injects_summaries(client, monkeypatch, db_ses
     system_prompt = captured["messages"][0]["content"]
     assert "文档摘要" in system_prompt
     assert "提出自注意力机制，可并行训练" in system_prompt
+    assert "第 9 篇论文摘要-唯一标记9" in system_prompt
     assert any("（文档摘要）" in label for label in response.json()["source_chunks"])
 
 

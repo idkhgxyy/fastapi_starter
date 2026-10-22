@@ -20,6 +20,9 @@ papers/
 HANDOFF.md
 SERVER_MIGRATION.md
 
+# 求职 JD 样本（仅本地演示数据）
+docs/jd-samples/
+
 # 运行时产物 / 本地测试样本
 celerybeat-schedule
 test_image_pdf.pdf

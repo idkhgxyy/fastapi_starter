@@ -134,10 +134,14 @@ async def _collect_materials(
     """把文档摘要 + 目标相关片段拼成材料块，控制总长度。"""
     parts: List[str] = []
     sources = [document.filename for document in documents]
+    listed_documents = documents[:10]
 
-    for document in documents[:10]:
+    parts.append(f"共 {len(documents)} 篇文档参与本次任务。")
+    for index, document in enumerate(listed_documents, start=1):
         summary = (document.summary or document.content[:300]).strip().replace("\n", " ")
-        parts.append(f"《{document.filename}》概要：{summary}")
+        parts.append(f"{index}. 《{document.filename}》概要：{summary}")
+    if len(documents) > len(listed_documents):
+        parts.append(f"（其余 {len(documents) - len(listed_documents)} 篇未列出摘要）")
 
     try:
         rag = RAGService(db)
@@ -330,7 +334,10 @@ async def run_task(db: Session, task_id: int) -> None:
             db,
             task,
             step,
-            system_prompt=("你是研究助理。只输出报告大纲，每行一个二级标题，不要编号、不要解释。"),
+            system_prompt=(
+                "你是研究助理。只输出报告大纲，每行一个二级标题，不要编号、不要解释。"
+                "必须覆盖目标中明确要求的所有部分；目标未要求时不要额外增加概览或引言。"
+            ),
             user_prompt=(
                 f"报告目标：{task.goal}\n\n"
                 f"可用材料：\n{materials}\n\n"
@@ -352,6 +359,9 @@ async def run_task(db: Session, task_id: int) -> None:
                 system_prompt=(
                     "你是研究助理。只依据给定材料撰写报告的某一节，不得编造材料中没有的内容；"
                     "材料未覆盖的部分请明确写「资料未覆盖」。输出 Markdown 正文。"
+                    "涉及数量、频次、比例等统计时，只统计材料中明确写出的条目并注明依据；"
+                    "材料不足以精确统计时不要给出具体数字，改用定性描述。"
+                    "文档篇数以材料首行「共 N 篇文档」为准。"
                 ),
                 user_prompt=(
                     f"报告目标：{task.goal}\n\n"

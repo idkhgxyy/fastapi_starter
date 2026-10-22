@@ -231,6 +231,10 @@ class TestExecution:
         assert "## 背景与目标" in task.result_markdown
         assert "## 参考材料" in task.result_markdown
         assert task.prompt_tokens > 0 and task.cost_cny > 0
+        # 材料首行必须写明总篇数，写作 prompt 必须禁止臆测统计数据
+        assert "共 1 篇文档参与本次任务。" in fake_llm[0]["messages"][1]["content"]
+        assert "1. 《课设要求.docx》概要：题目列表与要求" in fake_llm[1]["messages"][1]["content"]
+        assert "文档篇数以材料首行" in fake_llm[1]["messages"][0]["content"]
 
         step_names = [step.name for step in task.steps]
         assert step_names[0] == "retrieve"

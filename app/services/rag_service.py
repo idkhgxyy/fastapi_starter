@@ -45,7 +45,10 @@ GLOBAL_QUERY_MARKERS = (
     "对比",
     "比较",
     "区别",
+    "差异",
+    "差别",
     "异同",
+    "不同点",
     "共同点",
     "联系",
     "每篇",
@@ -65,9 +68,11 @@ GLOBAL_QUERY_MARKERS = (
     "主要内容",
 )
 
-# 摘要注入上限：单篇截断 + 总篇数截断，避免知识库变大后 prompt 无上限膨胀
-SUMMARY_INJECTION_MAX_DOCS = 8
-SUMMARY_INJECTION_PREVIEW_CHARS = 160
+# 摘要注入上限：单篇截断 + 总篇数截断，避免知识库变大后 prompt 无上限膨胀。
+# 20 篇可覆盖当前规模的知识库；更大规模应改为按相关性挑选摘要，而不是继续调大。
+SUMMARY_INJECTION_MAX_DOCS = 20
+# 单篇摘要注入上限：JD 类文档的任职要求常出现在 160 字之后，截得太短会只剩岗位职责
+SUMMARY_INJECTION_PREVIEW_CHARS = 320
 
 
 def is_global_query(query: str) -> bool:
