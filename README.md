@@ -23,7 +23,7 @@ A production-grade full-stack AI Agent system built with **FastAPI + React + Pos
 - **Goal-driven agent tasks** — describe a goal, let a background pipeline turn your knowledge base into a Markdown deliverable you can download
 - **BYOK cost governance** — pricing center, per-user monthly budget (auto-reset), cloud→local fallback chain, semantic cache (similar questions skip the LLM and report the amount saved), off-peak batch scheduling
 - `GitHub Actions CI` PostgreSQL integration tests + Docker build verification
-- `228 unit tests` + pre-commit hooks (ruff lint/format)
+- `249 unit tests` + pre-commit hooks (ruff lint/format)
 - **Auto Mock mode** — no API Key? No problem. System auto-enables Mock mode when `LLM_API_KEY` is empty
 - **`make setup` one-click start** — auto-generates SECRET_KEY, seeds demo data, pulls Ollama models
 - **Docker Compose Profiles** — core 4 containers by default, `--profile full` adds Ollama, `--profile monitor` adds Grafana/Prometheus/Flower
@@ -111,7 +111,7 @@ Cloud models bill per token and there is no "stop when the balance runs out" swi
 | **Pricing center** | `model_pricings` table stores per-model prices (CNY per 1M tokens); in-memory cache with global fallback; idempotent seeding | Single source of truth for every cost calculation — price changes are data, not code |
 | **Periodic budget** | Per-user monthly budget (resets each calendar month); a user budget overrides the global default | Cloud calls are rejected at the red line; spent/remaining is visible in real time |
 | **Fallback chain** | Automatic switch to local Ollama when the cloud fails, the budget is exhausted, or no key is configured | Cost control is decoupled from availability: the service degrades instead of stopping |
-| **Semantic cache** | Question embedding + cosine similarity against historical Q&A; hits return the cached answer | Paraphrased questions reuse answers above a 0.95 threshold; multi-intent or long questions bypass the cache to avoid partial answers. Replies report the amount saved, and the cache is invalidated whenever the knowledge base changes |
+| **Semantic cache** | Question embedding + cosine similarity against historical Q&A; hits return the cached answer | Two-stage hit policy: ≥0.95 reuses directly; 0.80–0.95 asks a short LLM check whether both questions mean the same thing. Multi-intent or long questions bypass the cache to avoid partial answers. Replies report the amount saved, and the cache is invalidated whenever the knowledge base changes |
 | **Off-peak scheduling** | Celery beat generates document summaries at 22:30 Beijing time | Runs inside the Bailian off-peak window (22:00–08:00) at half price; thinking mode is disabled for batch jobs (measured ~1/5 the cost) |
 
 Every LLM call (including fallbacks, cache misses, and batch jobs) is written to `llm_call_logs` and priced in CNY, so the observability panel can show total spend, cache hits, and cumulative savings.
@@ -409,7 +409,7 @@ Each LLM invocation records:
 ## Testing
 
 ```bash
-# Run all 228 unit tests
+# Run all 249 unit tests
 python3 -m pytest -q
 
 # With coverage report

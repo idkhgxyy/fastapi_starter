@@ -22,6 +22,8 @@ from app.models.user import User
 from app.services.rag_service import (
     SUMMARY_INJECTION_PREVIEW_CHARS,
     RAGService,
+    _boost_entity_matches,
+    _extract_entity_tokens,
     is_global_query,
 )
 
@@ -258,6 +260,7 @@ class TestGlobalQueryDetection:
             "这几篇有什么区别",
             "这两个岗位的技术栈要求有什么差异",
             "哪份 JD 明确提出 985/211 学历要求",
+            "雅思长线备考计划分为哪几个阶段",
             "哪些岗位明确要求 Python",
             "我都有哪些资料",
             "整体梳理一遍",
@@ -271,6 +274,26 @@ class TestGlobalQueryDetection:
             "如何配置 Redis 连接",
         ):
             assert is_global_query(query) is False
+
+
+class TestEntityBoost:
+    def test_extract_entity_tokens(self):
+        assert _extract_entity_tokens("百度 J106366 岗位要求什么语言？") == {"J106366"}
+        assert _extract_entity_tokens("网易 78567 要求什么数据库？") == {"78567"}
+        assert _extract_entity_tokens("2026 年课设什么时候交？") == set()
+
+    def test_boost_moves_matching_chunk_first(self):
+        chunks = [
+            SimpleNamespace(content="# J106514 后端开发 熟练掌握 go"),
+            SimpleNamespace(content="# J106366 地图 Agent 熟悉 Go"),
+            SimpleNamespace(content="# 其他岗位 Java"),
+        ]
+        ranked = _boost_entity_matches("百度 J106366 岗位要求什么编程语言？", chunks)
+        assert ranked[0] is chunks[1]
+
+    def test_no_entity_tokens_keeps_order(self):
+        chunks = [SimpleNamespace(content="片段A"), SimpleNamespace(content="片段B")]
+        assert _boost_entity_matches("普通问题", chunks) == chunks
 
 
 class TestMarkdownChunking:

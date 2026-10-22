@@ -69,7 +69,8 @@ class Settings(BaseSettings):
     SEMANTIC_CACHE_ENABLED: bool = True
     # 阈值与 embedding 模型强相关：bge-m3 相似度分布偏高（同义改写 ~0.9+）用 0.92；
     # text-embedding-v4 分布偏低（实测同义改写 ~0.74、无关问题 ~0.19）用 0.65
-    SEMANTIC_CACHE_THRESHOLD: float = 0.95
+    SEMANTIC_CACHE_THRESHOLD: float = 0.95  # 高置信度直接命中
+    SEMANTIC_CACHE_CANDIDATE_THRESHOLD: float = 0.80  # 灰区下限，低于此值不校验
 
     # 闲时批量任务（Celery beat 每天 22:30 北京时间触发，落在百炼闲时窗口）
     SUMMARIZE_MAX_DOCS_PER_RUN: int = 5  # 每轮最多摘要的文档数

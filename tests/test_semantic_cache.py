@@ -1,6 +1,7 @@
 """语义缓存单元测试"""
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 
@@ -26,13 +27,39 @@ def _vec(unit_index: int) -> list:
     return v
 
 
+def _vec_mix(cosine: float) -> list:
+    """与 _vec(0) 的余弦相似度恰为 cosine 的单位向量。"""
+    v = [0.0] * DIM
+    v[0] = cosine
+    v[1] = (1 - cosine * cosine) ** 0.5
+    return v
+
+
+def _add_entry(db, *, user_id=1, question="问题A", answer="回答A", embedding=None):
+    db.add(
+        QACacheEntry(
+            user_id=user_id,
+            question=question,
+            answer=answer,
+            embedding=embedding or _vec(0),
+            model_name="m",
+            prompt_tokens=100,
+            completion_tokens=50,
+            original_cost_cny=0.001,
+        )
+    )
+    db.commit()
+
+
 @pytest.fixture(autouse=True)
 def _restore_cache_settings():
     old_enabled = settings.SEMANTIC_CACHE_ENABLED
     old_threshold = settings.SEMANTIC_CACHE_THRESHOLD
+    old_candidate = settings.SEMANTIC_CACHE_CANDIDATE_THRESHOLD
     yield
     settings.SEMANTIC_CACHE_ENABLED = old_enabled
     settings.SEMANTIC_CACHE_THRESHOLD = old_threshold
+    settings.SEMANTIC_CACHE_CANDIDATE_THRESHOLD = old_candidate
 
 
 @pytest.fixture(autouse=True)
@@ -135,12 +162,86 @@ class TestStoreAndLookup:
         hit = asyncio.run(lookup_semantic_cache(db_session, 1, "问题A"))
         assert hit is None
 
-    def test_threshold_blocks_below_threshold(self, db_session):
-        # 阈值高于可能达到的最大相似度 1.0 → 即使完全相同的问题也判为未命中
-        settings.SEMANTIC_CACHE_THRESHOLD = 1.5
+    def test_below_candidate_threshold_misses(self, db_session):
+        # 候选阈值高于可能达到的最大相似度 1.0 → 连灰区校验都不触发
+        settings.SEMANTIC_CACHE_CANDIDATE_THRESHOLD = 1.5
         asyncio.run(store_semantic_cache(db_session, 1, "问题A", "回答A", "m", 100, 50, 0.001))
         hit = asyncio.run(lookup_semantic_cache(db_session, 1, "问题A"))
         assert hit is None
+
+    def test_gray_zone_hits_when_judge_says_same(self, db_session, monkeypatch):
+        _add_entry(db_session)
+
+        async def fake_embed(db, text):
+            return _vec_mix(0.90)
+
+        async def fake_judge(db, user_id, cached_question, new_question):
+            return True
+
+        monkeypatch.setattr(semantic_cache, "_embed_query", fake_embed)
+        monkeypatch.setattr(semantic_cache, "_judge_same_question", fake_judge)
+
+        hit = asyncio.run(lookup_semantic_cache(db_session, 1, "问题B"))
+        assert hit is not None
+        entry, similarity = hit
+        assert entry.answer == "回答A"
+        assert similarity == pytest.approx(0.90)
+
+    def test_gray_zone_misses_when_judge_says_different(self, db_session, monkeypatch):
+        _add_entry(db_session)
+
+        async def fake_embed(db, text):
+            return _vec_mix(0.93)
+
+        async def fake_judge(db, user_id, cached_question, new_question):
+            return False
+
+        monkeypatch.setattr(semantic_cache, "_embed_query", fake_embed)
+        monkeypatch.setattr(semantic_cache, "_judge_same_question", fake_judge)
+
+        assert asyncio.run(lookup_semantic_cache(db_session, 1, "问题B")) is None
+
+    def test_high_similarity_skips_judge(self, db_session, monkeypatch):
+        _add_entry(db_session)
+
+        async def fake_embed(db, text):
+            return _vec(0)
+
+        async def boom(*args, **kwargs):
+            raise AssertionError("高置信度命中不应调用校验")
+
+        monkeypatch.setattr(semantic_cache, "_embed_query", fake_embed)
+        monkeypatch.setattr(semantic_cache, "_judge_same_question", boom)
+
+        hit = asyncio.run(lookup_semantic_cache(db_session, 1, "问题B"))
+        assert hit is not None
+
+
+class TestJudgeSameQuestion:
+    @pytest.mark.parametrize(("reply", "expected"), [("是", True), ("是。", True), ("否", False)])
+    def test_parses_judge_reply(self, db_session, monkeypatch, reply, expected):
+        class FakeCompletions:
+            async def create(self, **kwargs):
+                return SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content=reply))],
+                    usage=SimpleNamespace(prompt_tokens=10, completion_tokens=1, total_tokens=11),
+                )
+
+        info = SimpleNamespace(
+            model_name="m",
+            client=SimpleNamespace(
+                api_key="fake",
+                chat=SimpleNamespace(completions=FakeCompletions()),
+            ),
+        )
+        monkeypatch.setattr("app.services.llm_service.get_llm_client", lambda user=None: info)
+        monkeypatch.setattr(
+            "app.services.llm_observability_service.create_llm_call_log",
+            lambda *args, **kwargs: None,
+        )
+
+        result = asyncio.run(semantic_cache._judge_same_question(db_session, 1, "A", "B"))
+        assert result is expected
 
 
 class TestCacheStats:

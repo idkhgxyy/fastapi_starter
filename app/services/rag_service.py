@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -55,6 +56,9 @@ GLOBAL_QUERY_MARKERS = (
     "各篇",
     "哪份",
     "哪篇",
+    "哪几个阶段",
+    "哪些阶段",
+    "几个阶段",
     "哪个岗位",
     "哪些岗位",
     "这几篇",
@@ -88,6 +92,29 @@ def _chunk_filename(chunk) -> Optional[str]:
     """取片段所属文档名；对测试替身等没有 document 关系的情况安全返回 None。"""
     document = getattr(chunk, "document", None)
     return getattr(document, "filename", None)
+
+
+_ENTITY_TOKEN_PATTERN = re.compile(r"[A-Za-z]{1,3}\d{4,}|\d{5,}")
+
+
+def _extract_entity_tokens(query: str) -> set:
+    """提取岗位编号/长数字等强标识（J106366、78567），用于词法加权。"""
+    return {token.upper() for token in _ENTITY_TOKEN_PATTERN.findall(query)}
+
+
+def _boost_entity_matches(query: str, candidates: List[DocumentChunk]) -> List[DocumentChunk]:
+    """含实体标识的候选优先；其余保持原向量顺序。"""
+    tokens = _extract_entity_tokens(query)
+    if not tokens:
+        return candidates
+    indexed = list(enumerate(candidates))
+    indexed.sort(
+        key=lambda pair: (
+            0 if any(token in pair[1].content.upper() for token in tokens) else 1,
+            pair[0],
+        )
+    )
+    return [chunk for _, chunk in indexed]
 
 
 @dataclass
@@ -358,7 +385,11 @@ class RAGService:
 
         query_embeddings = await self.get_embeddings([query])
         query_vector = query_embeddings[0]
+        entity_tokens = _extract_entity_tokens(query)
         recall_k = top_k * 3
+        if entity_tokens:
+            # 岗位编号这类强标识在向量里权重有限，扩大召回后用词法加权兜底
+            recall_k = max(recall_k, 30)
 
         try:
             stmt = (
@@ -383,6 +414,10 @@ class RAGService:
 
         if not candidates:
             return []
+
+        if entity_tokens:
+            candidates = _boost_entity_matches(query, candidates)
+            logger.info(f"==> 查询含实体标识 {sorted(entity_tokens)}，候选已做词法加权")
 
         reranker = get_reranker()
         if reranker is None:

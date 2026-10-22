@@ -10,7 +10,7 @@
 - 后端：FastAPI、SQLAlchemy 2、Alembic、PostgreSQL + pgvector、Redis、Celery/beat
 - 模型：OpenAI 兼容接口，BYOK（Fernet 加密）与全局 Key 兜底；默认 DashScope `deepseek-v4.1-flash`
 - 前端：React + TypeScript + Vite + Tailwind（`frontend/`）
-- 当前测试：230 个；迁移 head：`f6a7b8c9d0e1`
+- 当前测试：249 个；迁移 head：`f6a7b8c9d0e1`
 
 ## 2. 目录地图
 
@@ -45,7 +45,7 @@
 
 1. 切块：500 字 / 50 重叠，Markdown 优先按 `##`/`#` 标题切分；每个 chunk 前置文档标题（无 H1 用文件名）
 2. Embedding（`text-embedding-v4`，1024 维）写入 `document_chunks`，状态转 `ready`
-3. 查询：`/rag/search`（纯检索）、`/rag/query`（阻断式回答）、`/rag/query/stream`（SSE）
+3. 查询：`/rag/search`（纯检索）、`/rag/query`（阻断式回答）、`/rag/query/stream`（SSE）；含岗位编号/长数字的查询扩大召回并做词法加权
 4. 全局问题（总结/串讲/对比/差异/哪份/哪些岗位…）注入最多 20 篇摘要（单篇 320 字）
 5. 每晚 beat 生成缺失摘要（单轮最多 5 篇）；知识库变化时按用户失效语义缓存
 
@@ -67,7 +67,7 @@
 
 - `model_pricings` + `pricing_service`：模型单价中心，启动时幂等种子化
 - `cost_guard`：按用户自然月预算熔断，阻断与流式链路同标准
-- `semantic_cache`：余弦相似度 ≥ 0.95 复用答案；多意图/长问句绕过缓存；按用户隔离；知识库变化即失效
+- `semantic_cache`：两段式判定——≥0.95 直接复用；0.80–0.95 由短 LLM 校验“是否同一问题”；多意图/长问句绕过；按用户隔离；知识库变化即失效
 - 降级链：云端失败 → 本地/备用模型（视配置）
 - `llm_call_logs` + `/api/v1/observability/*` + Prometheus：真实模型、token、成本、延迟
 
@@ -99,7 +99,7 @@
 ## 6. 当前设计决策（不要重复推翻）
 
 - 不接云端 rerank（实测降质）；`top_k` 维持 3
-- 语义缓存阈值 0.95，多意图/长问句不进缓存
+- 语义缓存两段式：0.95 直接命中，0.80–0.95 走短 LLM 校验；多意图/长问句不进缓存
 - 摘要注入 20 篇 / 320 字；Agent 单节 2800 tokens
 - Markdown 标题切块 + 每块前置标题；改切块必须重建受影响文档 chunks
 - 线上 2G 机器：不引入 Ollama、本地重排、本地 OCR

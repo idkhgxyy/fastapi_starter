@@ -10,10 +10,11 @@
 - 向量来自与 RAG 相同的本地 embedding 服务（bge-m3），零额外成本
 - 查询/写入失败一律静默降级（缓存不可用不能影响正常对话）
 - 多意图/长问句不进缓存：向量相似不代表问题相同，复用会漏答
-- 命中判定阈值可配（SEMANTIC_CACHE_THRESHOLD，默认 0.95）
+- 两段式判定：≥0.95 直接命中；0.80–0.95 由 LLM 判断是否同一问题
 """
 
 import json
+import time
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
@@ -23,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.logging import logger
 from app.models.qa_cache import QACacheEntry
+from app.models.user import User
 from app.services.rag_service import RAGService
 
 
@@ -86,6 +88,62 @@ async def _embed_query(db: Session, text: str) -> list:
     return (await rag.get_embeddings([text]))[0]
 
 
+async def _judge_same_question(
+    db: Session, user_id: Optional[int], cached_question: str, new_question: str
+) -> bool:
+    """灰区校验：让模型判断两个问题是否在问同一件事（对象/数字/范围一致）。"""
+    from app.services.llm_observability_service import create_llm_call_log
+    from app.services.llm_service import get_llm_client
+
+    try:
+        user = db.get(User, user_id) if user_id is not None else None
+        info = get_llm_client(user)
+        if not getattr(info.client, "api_key", None):
+            return False
+
+        started = time.perf_counter()
+        response = await info.client.chat.completions.create(
+            model=info.model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "你是语义缓存校验器。判断两个问题是否在问同一件事，"
+                        "要求对象、数字、范围和意图一致。只回答「是」或「否」，不要解释。"
+                    ),
+                },
+                {"role": "user", "content": f"问题A：{cached_question}\n问题B：{new_question}"},
+            ],
+            temperature=0,
+            max_tokens=3,
+            extra_body={"enable_thinking": False},
+        )
+        answer = (response.choices[0].message.content or "").strip()
+        usage = getattr(response, "usage", None)
+        prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+        completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+        total_tokens = int(getattr(usage, "total_tokens", prompt_tokens + completion_tokens) or 0)
+        create_llm_call_log(
+            db,
+            user_id=user_id,
+            endpoint="/semantic-cache/verify",
+            prompt=f"问题A：{cached_question}\n问题B：{new_question}",
+            response=answer,
+            tool_calls=None,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            latency_ms=(time.perf_counter() - started) * 1000,
+            status="success",
+            model_name=info.model_name,
+            provider="semantic_cache_verify",
+        )
+        return answer.startswith("是") or answer.lower().startswith("yes")
+    except Exception as exc:
+        logger.warning(f"语义缓存候选校验失败，按不命中处理: {exc}")
+        return False
+
+
 async def lookup_semantic_cache(
     db: Session, user_id: Optional[int], question: str
 ) -> Optional[Tuple[QACacheEntry, float]]:
@@ -121,8 +179,16 @@ async def lookup_semantic_cache(
             return None
 
     try:
-        if similarity < settings.SEMANTIC_CACHE_THRESHOLD:
+        if similarity < settings.SEMANTIC_CACHE_CANDIDATE_THRESHOLD:
             return None
+        if similarity < settings.SEMANTIC_CACHE_THRESHOLD:
+            same_question = await _judge_same_question(db, user_id, entry.question, question)
+            logger.info(
+                f"==> 语义缓存灰区候选 (相似度 {similarity:.3f}, "
+                f"校验={'通过' if same_question else '拒绝'})"
+            )
+            if not same_question:
+                return None
 
         entry.hit_count += 1
         entry.last_hit_at = datetime.now(timezone.utc).replace(tzinfo=None)
