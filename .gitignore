@@ -18,6 +18,7 @@ papers/
 
 # 本地交接文档：含部署细节与服务器信息，明确不进公开仓库
 HANDOFF.md
+HANDOFF-archive-*.md
 SERVER_MIGRATION.md
 
 # 求职 JD 样本（仅本地演示数据）
