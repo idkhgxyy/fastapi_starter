@@ -11,6 +11,7 @@ from app.services import semantic_cache
 from app.services.semantic_cache import (
     get_cache_stats,
     invalidate_user_cache,
+    is_cacheable_question,
     lookup_semantic_cache,
     store_semantic_cache,
 )
@@ -57,7 +58,43 @@ def _fake_embeddings(monkeypatch):
     monkeypatch.setattr(semantic_cache, "RAGService", FakeRAGService)
 
 
+class TestCacheableQuestion:
+    @pytest.mark.parametrize(
+        "question",
+        [
+            "问题A",
+            "BERT 的预训练任务是什么？",
+            "帮我总结 Transformer 的自注意力机制",
+        ],
+    )
+    def test_simple_questions_are_cacheable(self, question):
+        assert is_cacheable_question(question) is True
+
+    @pytest.mark.parametrize(
+        "question",
+        [
+            # 线上真实误命中：短问题 + 追加一句，92% 相似度复用了短答案
+            "哪份 JD 明确提出 985/211 学历要求？还有哪些岗位写了实习时长或到岗频率要求？",
+            "问题A？问题B？",
+            "对比 A 和 B，并分别给出投递优先级",
+            "总结这篇论文，顺便列出实验缺陷",
+            "长" * 81,
+            "第一行问题\n第二行问题",
+        ],
+    )
+    def test_multi_intent_or_long_questions_are_not_cacheable(self, question):
+        assert is_cacheable_question(question) is False
+
+
 class TestStoreAndLookup:
+    def test_multi_intent_question_never_cached(self, db_session):
+        question = "哪份 JD 明确提出 985/211 学历要求？还有哪些岗位写了实习时长或到岗频率要求？"
+        asyncio.run(
+            store_semantic_cache(db_session, 1, question, "只答了一半的答案", "m", 100, 50, 0.001)
+        )
+        assert db_session.query(QACacheEntry).count() == 0
+        assert asyncio.run(lookup_semantic_cache(db_session, 1, question)) is None
+
     def test_store_then_hit(self, db_session):
         asyncio.run(
             store_semantic_cache(

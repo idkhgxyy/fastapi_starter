@@ -9,7 +9,8 @@
 - 按用户隔离：BYOK 场景下不同用户的问答互不可见
 - 向量来自与 RAG 相同的本地 embedding 服务（bge-m3），零额外成本
 - 查询/写入失败一律静默降级（缓存不可用不能影响正常对话）
-- 命中判定阈值可配（SEMANTIC_CACHE_THRESHOLD，默认 0.92）
+- 多意图/长问句不进缓存：向量相似不代表问题相同，复用会漏答
+- 命中判定阈值可配（SEMANTIC_CACHE_THRESHOLD，默认 0.95）
 """
 
 import json
@@ -40,6 +41,31 @@ def _parse_embedding(value) -> list:
     return list(value)
 
 
+CACHEABLE_MAX_QUERY_CHARS = 80
+MULTI_INTENT_MARKERS = (
+    "还有",
+    "以及",
+    "同时",
+    "并且",
+    "另外",
+    "分别",
+    "各自",
+    "顺便",
+    "补充",
+    "再问",
+)
+
+
+def is_cacheable_question(question: str) -> bool:
+    """多意图/长问句不查也不写缓存，避免把不同问题当成同一个问题复用答案。"""
+    text = question.strip()
+    if not text or len(text) > CACHEABLE_MAX_QUERY_CHARS:
+        return False
+    if text.count("?") + text.count("？") >= 2 or "\n" in text:
+        return False
+    return not any(marker in text for marker in MULTI_INTENT_MARKERS)
+
+
 def _python_scan(
     db: Session, user_id: Optional[int], vector: list
 ) -> Tuple[Optional[QACacheEntry], float]:
@@ -65,6 +91,8 @@ async def lookup_semantic_cache(
 ) -> Optional[Tuple[QACacheEntry, float]]:
     """查询语义缓存。命中返回 (条目, 相似度)，未命中/被禁用/出错返回 None。"""
     if not settings.SEMANTIC_CACHE_ENABLED:
+        return None
+    if not is_cacheable_question(question):
         return None
     try:
         vector = await _embed_query(db, question)
@@ -122,6 +150,8 @@ async def store_semantic_cache(
 ) -> None:
     """把一轮成功问答写入缓存。失败静默降级，不影响对话。"""
     if not settings.SEMANTIC_CACHE_ENABLED:
+        return
+    if not is_cacheable_question(question):
         return
     try:
         vector = await _embed_query(db, question)

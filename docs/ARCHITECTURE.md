@@ -67,7 +67,7 @@
 
 - `model_pricings` + `pricing_service`：模型单价中心，启动时幂等种子化
 - `cost_guard`：按用户自然月预算熔断，阻断与流式链路同标准
-- `semantic_cache`：余弦相似度 ≥ 0.92 复用答案；按用户隔离；知识库变化即失效
+- `semantic_cache`：余弦相似度 ≥ 0.95 复用答案；多意图/长问句绕过缓存；按用户隔离；知识库变化即失效
 - 降级链：云端失败 → 本地/备用模型（视配置）
 - `llm_call_logs` + `/api/v1/observability/*` + Prometheus：真实模型、token、成本、延迟
 
@@ -99,7 +99,7 @@
 ## 6. 当前设计决策（不要重复推翻）
 
 - 不接云端 rerank（实测降质）；`top_k` 维持 3
-- 语义缓存阈值 0.92，不调低
+- 语义缓存阈值 0.95，多意图/长问句不进缓存
 - 摘要注入 20 篇 / 320 字；Agent 单节 2800 tokens
 - Markdown 标题切块 + 每块前置标题；改切块必须重建受影响文档 chunks
 - 线上 2G 机器：不引入 Ollama、本地重排、本地 OCR
