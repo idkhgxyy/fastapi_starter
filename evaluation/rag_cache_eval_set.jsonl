@@ -1,0 +1,8 @@
+{"id": "cache-bert-objective", "base": "BERT 的预训练目标是什么？", "paraphrase": "BERT 预训练用了哪些任务？", "negative": "Transformer 的预训练目标是什么？"}
+{"id": "cache-jd-106366-language", "base": "J106366 这个岗位要求什么编程语言？", "paraphrase": "J106366 需要掌握哪种编程语言？", "negative": "J101073 这个岗位要求什么编程语言？"}
+{"id": "cache-ielts-long-goal", "base": "雅思长线备考计划的目标分数是多少？", "paraphrase": "雅思长线计划想考到多少分？", "negative": "雅思备考完全计划的目标分数是多少？"}
+{"id": "cache-transformer-bleu", "base": "Transformer 在英德翻译上达到多少 BLEU？", "paraphrase": "Transformer 英德翻译的 BLEU 分数是多少？", "negative": "Transformer 在英法翻译上达到多少 BLEU？"}
+{"id": "cache-rag-memory", "base": "RAG 把哪两种记忆结合？", "paraphrase": "RAG 结合了哪两类记忆？", "negative": "BERT 把哪两种记忆结合？"}
+{"id": "cache-course-report", "base": "课程设计实施方案的现场汇报占多少分？", "paraphrase": "课程设计实施方案里现场汇报占比多少？", "negative": "课程设计模板的现场汇报占多少分？"}
+{"id": "cache-multi-intent", "base": "BERT 的预训练目标是什么？", "paraphrase": "BERT 预训练的目标是什么？", "negative": "BERT 的预训练目标是什么？还有它的参数量是多少？"}
+{"id": "cache-changed-number", "base": "雅思长线计划的目标分数是多少？", "paraphrase": "雅思长线计划目标分数是多少？", "negative": "雅思长线计划的目标分数是 8.0 吗？"}

@@ -11,6 +11,7 @@ FastAPI + SQLAlchemy 2 + PostgreSQL/pgvector + Redis + Celery/beat + React/Vite�
 - 测试：`make test`（强制 sqlite 内存库，安全入口）
   - 等价命令：`docker compose exec -e DATABASE_URL='sqlite:///:memory:' api pytest tests/ -q`
 - 格式与静态检查：`docker compose exec api ruff format app tests && docker compose exec api ruff check app tests`
+- RAG/缓存评测：`docker compose exec -w /app -e PYTHONPATH=/app api python scripts/rag_eval.py`（需要真实知识库；`--skip-cache` 只跑检索）
 - 迁移：改 `app/models/` 后 `alembic revision --autogenerate -m "..."` → 审查 → `alembic upgrade head`；新模型要在 `app/models/__init__.py` 导入
 - 前端：`cd frontend && npm run build`；不要在 2G 服务器上构建
 - 依赖：运行时写 `requirements.txt`，测试/开发写 `requirements-dev.txt`；改依赖必须重建镜像
@@ -27,7 +28,7 @@ FastAPI + SQLAlchemy 2 + PostgreSQL/pgvector + Redis + Celery/beat + React/Vite�
 ## 不能改坏的约定
 
 - **流式**（`/chat/`、`/rag/query/stream`）：日志、落库、摘要、缓存写入全部在 `data: [DONE]` 之前完成；`[DONE]` 必须是最后一条。客户端断开时生成器会被取消，收尾放后面等于不执行。
-- **语义缓存**：聊天只在会话首轮读写；知识库变化（处理完成/删除/重传/摘要落库）按用户失效。两段式判定：相似度 ≥0.95 直接命中；0.80–0.95 由一次短 LLM 校验“是否同一问题”；多意图/长问句不查也不写。RAG 命中时返回写入时保存的来源快照（`source_chunks`）；无来源旧条目/聊天缓存按未命中处理。
+- **语义缓存**：聊天只在会话首轮读写；知识库变化（处理完成/删除/重传/摘要落库）按用户失效。两段式判定：相似度 ≥0.95 直接命中；0.80–0.95 由一次短 LLM 校验“是否同一问题”；多意图/长问句不查也不写。RAG 命中时返回写入时保存的来源快照（`source_chunks`）；无来源旧条目/聊天缓存按未命中处理。关键数字/岗位编号不一致时即使相似度再高也按未命中处理。
 - **RAG 切块**：Markdown 按 `\n## ` / `\n# ` 标题优先切分，每个 chunk 前置文档标题；改切块逻辑必须用 DB 里的 `content` 重建受影响文档的 chunks（不要重传，摘要保留）。
 - **检索加权**：查询含岗位编号/长数字（如 J106366、78567）时扩大召回，并按候选是否包含该标识做词法加权。
 - **摘要兜底**：全局性问题（总结/串讲/对比/差异/哪份/哪些岗位…）注入摘要；上限 20 篇、单篇预览 320 字。改这里跑 `tests/test_rag.py` 与 `tests/test_rag_service.py`。

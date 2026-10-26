@@ -170,6 +170,41 @@ class TestStoreAndLookup:
         # 聊天链路不要求来源，仍可命中
         assert asyncio.run(lookup_semantic_cache(db_session, 1, "问题A")) is not None
 
+    def test_changed_number_rejects_even_at_full_similarity(self, db_session, monkeypatch):
+        _add_entry(db_session, question="雅思长线计划的目标分数是多少？", embedding=_vec(0))
+
+        async def fake_embed(db, text):
+            return _vec(0)
+
+        monkeypatch.setattr(semantic_cache, "_embed_query", fake_embed)
+
+        hit = asyncio.run(lookup_semantic_cache(db_session, 1, "雅思长线计划的目标分数是 8.0 吗？"))
+        assert hit is None
+
+    def test_same_numbers_still_hit(self, db_session, monkeypatch):
+        _add_entry(db_session, question="目标分数 6.5 到 7.0", embedding=_vec(0))
+
+        async def fake_embed(db, text):
+            return _vec(0)
+
+        monkeypatch.setattr(semantic_cache, "_embed_query", fake_embed)
+
+        hit = asyncio.run(lookup_semantic_cache(db_session, 1, "目标分数 6.5-7.0"))
+        assert hit is not None
+
+    def test_changed_job_id_rejects_even_at_full_similarity(self, db_session, monkeypatch):
+        _add_entry(db_session, question="J106366 这个岗位要求什么编程语言？", embedding=_vec(0))
+
+        async def fake_embed(db, text):
+            return _vec(0)
+
+        monkeypatch.setattr(semantic_cache, "_embed_query", fake_embed)
+
+        hit = asyncio.run(
+            lookup_semantic_cache(db_session, 1, "J101073 这个岗位要求什么编程语言？")
+        )
+        assert hit is None
+
     def test_orthogonal_question_misses(self, db_session):
         asyncio.run(store_semantic_cache(db_session, 1, "问题A", "回答A", "m", 100, 50, 0.001))
         hit = asyncio.run(lookup_semantic_cache(db_session, 1, "问题B"))

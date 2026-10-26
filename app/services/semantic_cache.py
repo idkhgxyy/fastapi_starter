@@ -14,6 +14,7 @@
 """
 
 import json
+import re
 import time
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
@@ -41,6 +42,14 @@ def _parse_embedding(value) -> list:
     if isinstance(value, str):
         return json.loads(value)
     return list(value)
+
+
+_NUMBER_TOKEN_RE = re.compile(r"\d+(?:\.\d+)?")
+
+
+def _numeric_tokens(question: str) -> set:
+    """数字/岗位编号里的数字部分：变了就不是同一个问题，不能直接复用答案。"""
+    return set(_NUMBER_TOKEN_RE.findall(question))
 
 
 CACHEABLE_MAX_QUERY_CHARS = 80
@@ -188,6 +197,9 @@ async def lookup_semantic_cache(
 
     try:
         if similarity < settings.SEMANTIC_CACHE_CANDIDATE_THRESHOLD:
+            return None
+        if _numeric_tokens(entry.question) != _numeric_tokens(question):
+            logger.info("==> 语义缓存候选数字/岗位编号不一致，按未命中处理")
             return None
         if require_sources and not entry.source_chunks:
             logger.info("==> 语义缓存候选缺少来源，RAG 查询按未命中处理")
