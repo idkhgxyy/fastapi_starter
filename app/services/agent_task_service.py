@@ -211,7 +211,7 @@ async def _call_llm(
         temperature=0.3,
         max_tokens=max_tokens,
         # 生成型任务关闭思考：思维链按输出计费，且会挤占正文预算
-        extra_body={"enable_thinking": False},
+        extra_body={"thinking": {"type": "disabled"}},
     )
     content = (response.choices[0].message.content or "").strip()
     if getattr(response.choices[0], "finish_reason", None) == "length":

@@ -16,7 +16,7 @@
 import json
 import time
 from datetime import datetime, timezone
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -116,7 +116,7 @@ async def _judge_same_question(
             ],
             temperature=0,
             max_tokens=3,
-            extra_body={"enable_thinking": False},
+            extra_body={"thinking": {"type": "disabled"}},
         )
         answer = (response.choices[0].message.content or "").strip()
         usage = getattr(response, "usage", None)
@@ -145,9 +145,17 @@ async def _judge_same_question(
 
 
 async def lookup_semantic_cache(
-    db: Session, user_id: Optional[int], question: str
+    db: Session,
+    user_id: Optional[int],
+    question: str,
+    *,
+    require_sources: bool = False,
 ) -> Optional[Tuple[QACacheEntry, float]]:
-    """查询语义缓存。命中返回 (条目, 相似度)，未命中/被禁用/出错返回 None。"""
+    """查询语义缓存。命中返回 (条目, 相似度)，未命中/被禁用/出错返回 None。
+
+    require_sources=True 时，无来源快照的旧条目/聊天缓存按未命中处理，
+    让 RAG 重新检索并写入带来源的缓存。
+    """
     if not settings.SEMANTIC_CACHE_ENABLED:
         return None
     if not is_cacheable_question(question):
@@ -181,6 +189,9 @@ async def lookup_semantic_cache(
     try:
         if similarity < settings.SEMANTIC_CACHE_CANDIDATE_THRESHOLD:
             return None
+        if require_sources and not entry.source_chunks:
+            logger.info("==> 语义缓存候选缺少来源，RAG 查询按未命中处理")
+            return None
         if similarity < settings.SEMANTIC_CACHE_THRESHOLD:
             same_question = await _judge_same_question(db, user_id, entry.question, question)
             logger.info(
@@ -213,6 +224,7 @@ async def store_semantic_cache(
     prompt_tokens: int,
     completion_tokens: int,
     original_cost_cny: float,
+    source_chunks: Optional[List[str]] = None,
 ) -> None:
     """把一轮成功问答写入缓存。失败静默降级，不影响对话。"""
     if not settings.SEMANTIC_CACHE_ENABLED:
@@ -226,6 +238,7 @@ async def store_semantic_cache(
                 user_id=user_id,
                 question=question,
                 answer=answer,
+                source_chunks=source_chunks,
                 embedding=vector,
                 model_name=model_name,
                 prompt_tokens=prompt_tokens,

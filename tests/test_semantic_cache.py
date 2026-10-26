@@ -142,6 +142,34 @@ class TestStoreAndLookup:
         assert similarity == pytest.approx(1.0)
         assert entry.hit_count == 1
 
+    def test_store_preserves_source_chunks(self, db_session):
+        asyncio.run(
+            store_semantic_cache(
+                db_session,
+                1,
+                "问题A",
+                "回答A",
+                "m",
+                100,
+                50,
+                0.001,
+                source_chunks=["来源一", "来源二"],
+            )
+        )
+        hit = asyncio.run(lookup_semantic_cache(db_session, 1, "问题A", require_sources=True))
+        assert hit is not None
+        assert hit[0].source_chunks == ["来源一", "来源二"]
+
+    def test_require_sources_rejects_legacy_entry(self, db_session):
+        asyncio.run(store_semantic_cache(db_session, 1, "问题A", "回答A", "m", 100, 50, 0.001))
+
+        # RAG 不能复用没有来源的旧条目/聊天缓存
+        assert (
+            asyncio.run(lookup_semantic_cache(db_session, 1, "问题A", require_sources=True)) is None
+        )
+        # 聊天链路不要求来源，仍可命中
+        assert asyncio.run(lookup_semantic_cache(db_session, 1, "问题A")) is not None
+
     def test_orthogonal_question_misses(self, db_session):
         asyncio.run(store_semantic_cache(db_session, 1, "问题A", "回答A", "m", 100, 50, 0.001))
         hit = asyncio.run(lookup_semantic_cache(db_session, 1, "问题B"))

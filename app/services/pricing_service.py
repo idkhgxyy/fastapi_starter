@@ -20,8 +20,14 @@ from app.models.model_pricing import ModelPricing
 _PRICE_CACHE: dict = {}
 _CACHE_TTL_SECONDS = 60
 
-# 内置种子价格（2026-10 查自百炼官方价格页，忙时价）
+# 内置种子价格（2026-10 查自各厂商官方价格页，忙时价）
 DEFAULT_PRICINGS = [
+    {
+        "model_name": "deepseek-flash",
+        "input": 2.13,
+        "output": 8.52,
+        "note": "DeepSeek 官方价，忙时 $0.30/$1.20 每百万 token，按 7.1 折算",
+    },
     {
         "model_name": "deepseek-v4.1-flash",
         "input": 2.0,

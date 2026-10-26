@@ -35,7 +35,7 @@ class TestSeedDefaultPricings:
         inserted = seed_default_pricings(db_session)
         assert inserted == len(DEFAULT_PRICINGS)
         names = {r.model_name for r in db_session.query(ModelPricing).all()}
-        assert "deepseek-v4.1-flash" in names
+        assert "deepseek-flash" in names
 
     def test_seed_is_idempotent(self, db_session):
         seed_default_pricings(db_session)

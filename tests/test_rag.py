@@ -683,8 +683,10 @@ def test_rag_query_stream_cache_hit_skips_llm(client, monkeypatch):
     class FakeEntry:
         answer = "这是缓存里的历史回答"
         original_cost_cny = 0.006
+        source_chunks = ["缓存命中的来源片段"]
 
-    async def fake_lookup(db, user_id, question):
+    async def fake_lookup(db, user_id, question, *, require_sources=False):
+        assert require_sources is True
         return FakeEntry(), 0.98
 
     called = {"llm": False}
@@ -707,4 +709,38 @@ def test_rag_query_stream_cache_hit_skips_llm(client, monkeypatch):
 
     assert "缓存命中" in content
     assert "这是缓存里的历史回答" in content
+    assert "缓存命中的来源片段" in content
     assert called["llm"] is False
+
+
+def test_rag_query_cache_hit_returns_source_chunks(client, monkeypatch):
+    """阻塞接口命中缓存时也必须返回来源，答案才可核验。"""
+    import app.api.routers.rag as rag_router
+
+    token = _create_user_and_login(client, "nonstream-cache")
+
+    class FakeEntry:
+        answer = "缓存答案"
+        original_cost_cny = 0.003
+        source_chunks = ["来源片段一", "来源片段二"]
+
+    async def fake_lookup(db, user_id, question, *, require_sources=False):
+        assert require_sources is True
+        return FakeEntry(), 0.97
+
+    def fake_get_llm_client(user=None):
+        raise AssertionError("命中缓存时不应获取 LLM 客户端")
+
+    monkeypatch.setattr(rag_router, "lookup_semantic_cache", fake_lookup)
+    monkeypatch.setattr(rag_router, "get_llm_client", fake_get_llm_client)
+
+    response = client.post(
+        "/api/v1/rag/query",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"query": "缓存问题", "top_k": 3},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source_chunks"] == ["来源片段一", "来源片段二"]
+    assert "缓存答案" in payload["answer"]

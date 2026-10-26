@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.config import settings
@@ -26,6 +26,8 @@ class QACacheEntry(Base):
     )
     question: Mapped[str] = mapped_column(Text, nullable=False)
     answer: Mapped[str] = mapped_column(Text, nullable=False)
+    # 命中时原样返回的来源快照；聊天链路缓存可为空，RAG 命中要求非空
+    source_chunks: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     embedding = mapped_column(Vector(settings.EMBEDDING_DIMENSION), nullable=False)
     model_name: Mapped[str] = mapped_column(String(100), nullable=False, default="")
 

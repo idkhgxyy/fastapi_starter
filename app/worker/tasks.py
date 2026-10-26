@@ -94,7 +94,7 @@ async def _summarize_document(db, document) -> str:
         max_tokens=1024,
         # 批量摘要不需要思考：思考会吃掉输出预算且按输出价计费，
         # 关掉后正文有保障、成本减半（deepseek-v4 系混合思考模型）
-        extra_body={"enable_thinking": False},
+        extra_body={"thinking": {"type": "disabled"}},
     )
     summary = response.choices[0].message.content
 

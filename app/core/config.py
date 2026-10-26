@@ -32,8 +32,8 @@ class Settings(BaseSettings):
 
     # LLM 配置 (默认提供 DeepSeek 的占位符，可通过 .env 覆盖)
     LLM_API_KEY: str = ""
-    LLM_BASE_URL: str = "https://api.deepseek.com/v1"
-    LLM_MODEL_NAME: str = "deepseek-chat"
+    LLM_BASE_URL: str = "https://api.deepseek.com"
+    LLM_MODEL_NAME: str = "deepseek-flash"
     LLM_PROVIDER: str = "deepseek"
     LLM_INPUT_PRICE_PER_1K_TOKENS: float = 0.0
     LLM_OUTPUT_PRICE_PER_1K_TOKENS: float = 0.0

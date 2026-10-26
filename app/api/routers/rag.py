@@ -204,7 +204,9 @@ async def query_knowledge_base(
         raise HTTPException(status_code=402, detail=budget_reject_message(budget))
 
     # 语义缓存：相同/相似查询直接复用历史答案
-    cache_hit = await lookup_semantic_cache(db, current_user.id, request.query)
+    cache_hit = await lookup_semantic_cache(
+        db, current_user.id, request.query, require_sources=True
+    )
     if cache_hit is not None:
         entry, similarity = cache_hit
         return RAGQueryResponse(
@@ -213,7 +215,7 @@ async def query_knowledge_base(
                 f"（缓存命中 · 相似度 {similarity:.0%} · 已节省 ¥{entry.original_cost_cny:.4f}）\n\n"
                 f"{entry.answer}"
             ),
-            source_chunks=[],
+            source_chunks=entry.source_chunks or [],
         )
 
     rag_service = RAGService(db)
@@ -297,6 +299,7 @@ async def query_knowledge_base(
             prompt_tokens,
             completion_tokens,
             estimate_cost_cny(db, llm_info.model_name, prompt_tokens, completion_tokens),
+            source_chunks=knowledge.source_labels(),
         )
 
         return RAGQueryResponse(
@@ -343,7 +346,9 @@ async def query_knowledge_base_stream(
         raise HTTPException(status_code=402, detail=budget_reject_message(budget))
 
     # 语义缓存：命中则回放历史答案，不调 LLM
-    cache_hit = await lookup_semantic_cache(db, current_user.id, request.query)
+    cache_hit = await lookup_semantic_cache(
+        db, current_user.id, request.query, require_sources=True
+    )
     if cache_hit is not None:
         entry, similarity = cache_hit
         note = f"（缓存命中 · 相似度 {similarity:.0%} · 已节省 ¥{entry.original_cost_cny:.4f}）\n\n"
@@ -351,7 +356,7 @@ async def query_knowledge_base_stream(
         async def _replay():
             yield _sse({"content": note})
             yield _sse({"content": entry.answer})
-            yield _sse({"source_chunks": []})
+            yield _sse({"source_chunks": entry.source_chunks or []})
             yield "data: [DONE]\n\n"
 
         return StreamingResponse(_replay(), media_type="text/event-stream")
@@ -456,6 +461,7 @@ async def query_knowledge_base_stream(
                     prompt_tokens,
                     completion_tokens,
                     cost_cny,
+                    source_chunks=source_chunk_contents,
                 )
 
             yield _sse({"source_chunks": source_chunk_contents})
