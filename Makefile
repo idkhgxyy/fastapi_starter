@@ -1,5 +1,8 @@
 .PHONY: help setup up down restart logs seed test smoke ui-smoke backup backup-pull shell ollama-pull clean
 
+# 服务器地址不入库；运行时用 SERVER_HOST=ubuntu@... 覆盖
+SERVER_HOST ?= ubuntu@YOUR_SERVER
+
 help: ## 显示帮助信息
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -37,12 +40,12 @@ smoke: ## 真实 HTTP 冒烟（专用账号 + 临时文档，验证上传/RAG/�
 ui-smoke: ## 浏览器层冒烟（本机 Playwright；服务器先建 SSH 隧道）
 	/usr/bin/python3 scripts/ui_smoke_test.py
 
-backup: ## 立即在服务器做一次数据库备份
-	ssh ubuntu@YOUR_SERVER 'cd ~/fastapi_starter && ./scripts/backup_db_docker.sh'
+backup: ## 立即在服务器做一次数据库备份（SERVER_HOST=...）
+	ssh $(SERVER_HOST) 'cd ~/fastapi_starter && ./scripts/backup_db_docker.sh'
 
-backup-pull: ## 拉取服务器数据库备份到本地 backups/
+backup-pull: ## 拉取服务器数据库备份到本地 backups/（SERVER_HOST=...）
 	mkdir -p backups
-	rsync -avz --include='fastapi_db_*.sql.gz' --exclude='*' ubuntu@YOUR_SERVER:~/fastapi_starter/backups/ backups/
+	rsync -avz --include='fastapi_db_*.sql.gz' --exclude='*' $(SERVER_HOST):~/fastapi_starter/backups/ backups/
 
 shell: ## 进入 API 容器 shell
 	docker compose exec api bash
