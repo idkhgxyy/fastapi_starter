@@ -56,4 +56,4 @@ ssh -N -L 18081:127.0.0.1:8000 ubuntu@YOUR_SERVER
 UI_SMOKE_BASE_URL=http://127.0.0.1:18081 /usr/bin/python3 scripts/ui_smoke_test.py
 ```
 
-覆盖登录页、侧栏上传到“就绪”、知识库搜索命中、对话框提问、流式结束和清理；失败截图写到 `evaluation/artifacts/`（gitignored）。
+覆盖登录页、侧栏上传到“就绪”、知识库搜索、知识库问答与来源、对话框提问、流式结束和清理；失败/成功截图写到 `evaluation/artifacts/`（gitignored）。
