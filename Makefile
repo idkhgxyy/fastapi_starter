@@ -1,4 +1,4 @@
-.PHONY: help setup up down restart logs seed test smoke shell ollama-pull clean
+.PHONY: help setup up down restart logs seed test smoke ui-smoke shell ollama-pull clean
 
 help: ## 显示帮助信息
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -33,6 +33,9 @@ test: ## 运行 pytest 测试（强制内存 sqlite，绝不动真实库）
 
 smoke: ## 真实 HTTP 冒烟（专用账号 + 临时文档，验证上传/RAG/缓存/流式）
 	docker compose exec -w /app -e PYTHONPATH=/app api python scripts/smoke_test.py
+
+ui-smoke: ## 浏览器层冒烟（本机 Playwright；服务器先建 SSH 隧道）
+	/usr/bin/python3 scripts/ui_smoke_test.py
 
 shell: ## 进入 API 容器 shell
 	docker compose exec api bash

@@ -24,6 +24,9 @@ SERVER_MIGRATION.md
 # 求职 JD 样本（仅本地演示数据）
 docs/jd-samples/
 
+# 浏览器冒烟截图
+evaluation/artifacts/
+
 # 运行时产物 / 本地测试样本
 celerybeat-schedule
 test_image_pdf.pdf

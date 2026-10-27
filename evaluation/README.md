@@ -47,3 +47,13 @@ sudo docker exec -w /app -e PYTHONPATH=/app fastapi-starter-api python scripts/s
 ```
 
 脚本使用专用 `smoke@example.com` 账号（首次自动注册，可用 `SMOKE_EMAIL`/`SMOKE_PASSWORD` 覆盖；默认账号只适合本机/内网），上传一篇唯一事实的临时文档，验证健康检查、ready、真实 RAG、缓存命中、换数字拒绝、流式 `[DONE]` 和清理；任何一步失败返回非 0。
+
+浏览器层（需本机 Playwright）：
+
+```bash
+# 服务器前端只监听 127.0.0.1，先建隧道
+ssh -N -L 18081:127.0.0.1:8000 ubuntu@YOUR_SERVER
+UI_SMOKE_BASE_URL=http://127.0.0.1:18081 /usr/bin/python3 scripts/ui_smoke_test.py
+```
+
+覆盖登录页、侧栏上传到“就绪”、知识库搜索命中、对话框提问、流式结束和清理；失败截图写到 `evaluation/artifacts/`（gitignored）。
