@@ -31,5 +31,8 @@ evaluation/artifacts/
 celerybeat-schedule
 test_image_pdf.pdf
 
+# 数据库备份（含用户数据，不进仓库）
+backups/
+
 # macOS
 .DS_Store
