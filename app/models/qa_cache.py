@@ -30,6 +30,10 @@ class QACacheEntry(Base):
     source_chunks: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     embedding = mapped_column(Vector(settings.EMBEDDING_DIMENSION), nullable=False)
     model_name: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    # 生成该向量所用的 embedding 模型；换模型后旧条目自动失效
+    embedding_model: Mapped[str] = mapped_column(
+        String(100), nullable=False, default=settings.EMBEDDING_MODEL_NAME
+    )
 
     # 原始调用的用量与成本（按定价中心折算），命中时以此为"节省金额"
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)

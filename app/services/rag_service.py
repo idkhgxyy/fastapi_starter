@@ -374,17 +374,20 @@ class RAGService:
         owner_id: int,
         top_k: int = 3,
         document_ids: Optional[List[int]] = None,
+        query_vector: Optional[list] = None,
     ) -> List[DocumentChunk]:
         """根据 query 检索最相关的 DocumentChunks，并在可用时做重排。
 
         document_ids 为 None 时检索该用户全部文档；传入列表时只在这些文档内检索
-        （Agent 任务的"指定资料范围"用）。
+        （Agent 任务的"指定资料范围"用）。query_vector 已算好时直接复用，
+        避免缓存查询、检索、写缓存重复 embedding。
         """
         if not self.has_ready_documents(owner_id=owner_id):
             return []
 
-        query_embeddings = await self.get_embeddings([query])
-        query_vector = query_embeddings[0]
+        if query_vector is None:
+            query_embeddings = await self.get_embeddings([query])
+            query_vector = query_embeddings[0]
         entity_tokens = _extract_entity_tokens(query)
         recall_k = top_k * 3
         if entity_tokens:
@@ -490,7 +493,12 @@ class RAGService:
         return list(self.db.execute(stmt).scalars().all())
 
     async def build_knowledge_context(
-        self, *, query: str, owner_id: int, top_k: int = 3
+        self,
+        *,
+        query: str,
+        owner_id: int,
+        top_k: int = 3,
+        query_vector: Optional[list] = None,
     ) -> KnowledgeContext:
         """检索原文片段，并在需要时用文档摘要兜底，产出可直接注入 prompt 的参考块。
 
@@ -501,7 +509,10 @@ class RAGService:
         chunks: List[DocumentChunk] = []
         try:
             chunks = await self.retrieve_relevant_chunks(
-                query=query, owner_id=owner_id, top_k=top_k
+                query=query,
+                owner_id=owner_id,
+                top_k=top_k,
+                query_vector=query_vector,
             )
         except Exception as exc:
             # embedding 调用失败等：不应连带丢掉摘要兜底，降级为"只有摘要"

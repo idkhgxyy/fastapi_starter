@@ -2,8 +2,19 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.core.config import settings
 from app.models.document import DOCUMENT_STATUS_QUEUED, DOCUMENT_STATUS_READY, Document
 from app.services.rag_service import RAGService
+
+
+@pytest.fixture(autouse=True)
+def _stub_rag_embeddings(monkeypatch):
+    """RAG 路由会在缓存/检索前算一次查询向量；测试里固定返回，避免打真实 API。"""
+
+    async def fake_get_embeddings(self, texts):
+        return [[1.0] * settings.EMBEDDING_DIMENSION for _ in texts]
+
+    monkeypatch.setattr(RAGService, "get_embeddings", fake_get_embeddings)
 
 
 def _create_user_and_login(client, suffix: str) -> str:
@@ -141,7 +152,7 @@ def test_query_knowledge_base_uses_current_user_scope(client, monkeypatch, db_se
     db_session.add(ready_doc)
     db_session.commit()
 
-    async def fake_retrieve(_self, *, query=None, owner_id, top_k=None):
+    async def fake_retrieve(_self, *, query=None, owner_id, top_k=None, query_vector=None):
         assert owner_id == user_id
         assert query == "我的知识库里有什么？"
         assert top_k == 2
@@ -218,7 +229,7 @@ def test_rag_query_global_question_injects_summaries(client, monkeypatch, db_ses
         )
     db_session.commit()
 
-    async def fake_retrieve(_self, *, query, owner_id, top_k):
+    async def fake_retrieve(_self, *, query, owner_id, top_k, query_vector=None):
         # 模拟线上真实故障：全局问题一个原文片段都没检索到
         return []
 
@@ -427,7 +438,7 @@ def test_rag_query_stream_returns_sse(client, monkeypatch):
     class FakeChunk:
         content = "streamed reply chunk"
 
-    async def fake_retrieve(_self, *, query=None, owner_id=None, top_k=None):
+    async def fake_retrieve(_self, *, query=None, owner_id=None, top_k=None, query_vector=None):
         return [FakeChunk()]
 
     async def fake_stream_create(**kwargs):
@@ -685,8 +696,9 @@ def test_rag_query_stream_cache_hit_skips_llm(client, monkeypatch):
         original_cost_cny = 0.006
         source_chunks = ["缓存命中的来源片段"]
 
-    async def fake_lookup(db, user_id, question, *, require_sources=False):
+    async def fake_lookup(db, user_id, question, *, require_sources=False, query_vector=None):
         assert require_sources is True
+        assert query_vector is not None
         return FakeEntry(), 0.98
 
     called = {"llm": False}
@@ -713,6 +725,78 @@ def test_rag_query_stream_cache_hit_skips_llm(client, monkeypatch):
     assert called["llm"] is False
 
 
+def test_rag_query_multi_turn_skips_semantic_cache(client, monkeypatch, db_session):
+    """多轮 RAG 依赖上文，不应查缓存也不应写缓存。"""
+    import app.api.routers.rag as rag_router
+
+    token = _create_user_and_login(client, "multi-turn-cache")
+    user_id = int(
+        client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {token}"}).json()["id"]
+    )
+    ready_doc = Document(
+        owner_id=user_id,
+        filename="multi-turn.md",
+        content="多轮上下文",
+        status=DOCUMENT_STATUS_READY,
+        chunks_count=1,
+    )
+    db_session.add(ready_doc)
+    db_session.commit()
+
+    async def fake_history(user_id, session_id):
+        return [
+            {"role": "user", "content": "上一轮问题"},
+            {"role": "assistant", "content": "上一轮回答"},
+        ]
+
+    async def fake_append(*args, **kwargs):
+        return None
+
+    async def fake_retrieve(_self, *, query=None, owner_id, top_k=None, query_vector=None):
+        return [SimpleNamespace(content="多轮上下文片段", document_id=ready_doc.id)]
+
+    async def boom_lookup(*args, **kwargs):
+        raise AssertionError("多轮 RAG 不应查询语义缓存")
+
+    async def boom_store(*args, **kwargs):
+        raise AssertionError("多轮 RAG 不应写入语义缓存")
+
+    captured = {}
+
+    def fake_get_llm_client(user=None):
+        class DummyClient:
+            class chat:
+                class completions:
+                    @staticmethod
+                    async def create(**kwargs):
+                        captured["messages"] = kwargs["messages"]
+                        return SimpleNamespace(
+                            choices=[SimpleNamespace(message=SimpleNamespace(content="多轮回答"))],
+                            usage=SimpleNamespace(
+                                prompt_tokens=5, completion_tokens=7, total_tokens=12
+                            ),
+                        )
+
+        return SimpleNamespace(client=DummyClient(), model_name="test-model")
+
+    monkeypatch.setattr(rag_router, "load_session_history", fake_history)
+    monkeypatch.setattr(rag_router, "append_session_message", fake_append)
+    monkeypatch.setattr(RAGService, "retrieve_relevant_chunks", fake_retrieve)
+    monkeypatch.setattr(rag_router, "lookup_semantic_cache", boom_lookup)
+    monkeypatch.setattr(rag_router, "store_semantic_cache", boom_store)
+    monkeypatch.setattr(rag_router, "get_llm_client", fake_get_llm_client)
+
+    response = client.post(
+        "/api/v1/rag/query",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"query": "继续说说", "top_k": 2, "session_id": "multi-session"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "多轮回答"
+    assert any(message.get("content") == "上一轮问题" for message in captured["messages"])
+
+
 def test_rag_query_cache_hit_returns_source_chunks(client, monkeypatch):
     """阻塞接口命中缓存时也必须返回来源，答案才可核验。"""
     import app.api.routers.rag as rag_router
@@ -724,8 +808,9 @@ def test_rag_query_cache_hit_returns_source_chunks(client, monkeypatch):
         original_cost_cny = 0.003
         source_chunks = ["来源片段一", "来源片段二"]
 
-    async def fake_lookup(db, user_id, question, *, require_sources=False):
+    async def fake_lookup(db, user_id, question, *, require_sources=False, query_vector=None):
         assert require_sources is True
+        assert query_vector is not None
         return FakeEntry(), 0.97
 
     def fake_get_llm_client(user=None):

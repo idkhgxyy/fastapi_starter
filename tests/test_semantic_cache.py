@@ -1,6 +1,7 @@
 """语义缓存单元测试"""
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -35,13 +36,24 @@ def _vec_mix(cosine: float) -> list:
     return v
 
 
-def _add_entry(db, *, user_id=1, question="问题A", answer="回答A", embedding=None):
+def _add_entry(
+    db,
+    *,
+    user_id=1,
+    question="问题A",
+    answer="回答A",
+    embedding=None,
+    source_chunks=None,
+    created_at=None,
+):
     db.add(
         QACacheEntry(
             user_id=user_id,
             question=question,
             answer=answer,
             embedding=embedding or _vec(0),
+            source_chunks=source_chunks,
+            created_at=created_at or datetime.now(timezone.utc).replace(tzinfo=None),
             model_name="m",
             prompt_tokens=100,
             completion_tokens=50,
@@ -104,6 +116,7 @@ class TestCacheableQuestion:
             "哪份 JD 明确提出 985/211 学历要求？还有哪些岗位写了实习时长或到岗频率要求？",
             "问题A？问题B？",
             "对比 A 和 B，并分别给出投递优先级",
+            "对比 Transformer 和 BERT 的注意力机制",
             "总结这篇论文，顺便列出实验缺陷",
             "长" * 81,
             "第一行问题\n第二行问题",
@@ -204,6 +217,90 @@ class TestStoreAndLookup:
             lookup_semantic_cache(db_session, 1, "J101073 这个岗位要求什么编程语言？")
         )
         assert hit is None
+
+    def test_top_candidates_skip_source_less_entry(self, db_session, monkeypatch):
+        _add_entry(
+            db_session,
+            question="J106366 这个岗位要求什么编程语言？",
+            embedding=_vec(0),
+        )
+        _add_entry(
+            db_session,
+            question="J106366 需要哪种编程语言？",
+            embedding=_vec_mix(0.99),
+            source_chunks=["来源"],
+        )
+
+        async def fake_embed(db, text):
+            return _vec(0)
+
+        monkeypatch.setattr(semantic_cache, "_embed_query", fake_embed)
+
+        hit = asyncio.run(
+            lookup_semantic_cache(
+                db_session, 1, "J106366 这个岗位要求什么编程语言？", require_sources=True
+            )
+        )
+        assert hit is not None
+        assert hit[0].question == "J106366 需要哪种编程语言？"
+
+    def test_top_candidates_skip_numeric_mismatch(self, db_session, monkeypatch):
+        _add_entry(
+            db_session,
+            question="J101073 这个岗位要求什么编程语言？",
+            embedding=_vec(0),
+            source_chunks=["来源"],
+        )
+        _add_entry(
+            db_session,
+            question="J106366 这个岗位要求什么编程语言？",
+            embedding=_vec_mix(0.99),
+            source_chunks=["来源"],
+        )
+
+        async def fake_embed(db, text):
+            return _vec(0)
+
+        monkeypatch.setattr(semantic_cache, "_embed_query", fake_embed)
+
+        hit = asyncio.run(
+            lookup_semantic_cache(
+                db_session, 1, "J106366 这个岗位要求什么编程语言？", require_sources=True
+            )
+        )
+        assert hit is not None
+        assert hit[0].question == "J106366 这个岗位要求什么编程语言？"
+
+    def test_entity_mismatch_forces_judge_at_full_similarity(self, db_session, monkeypatch):
+        _add_entry(db_session, question="BERT 的预训练目标是什么？", embedding=_vec(0))
+
+        async def fake_embed(db, text):
+            return _vec(0)
+
+        calls = []
+
+        async def fake_judge(db, user_id, cached_question, new_question):
+            calls.append((cached_question, new_question))
+            return False
+
+        monkeypatch.setattr(semantic_cache, "_embed_query", fake_embed)
+        monkeypatch.setattr(semantic_cache, "_judge_same_question", fake_judge)
+
+        hit = asyncio.run(lookup_semantic_cache(db_session, 1, "Transformer 的预训练目标是什么？"))
+        assert hit is None
+        assert calls
+
+    def test_expired_entry_misses(self, db_session, monkeypatch):
+        monkeypatch.setattr(settings, "SEMANTIC_CACHE_TTL_DAYS", 30)
+        old = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=31)
+        _add_entry(db_session, question="问题A", embedding=_vec(0), created_at=old)
+
+        async def fake_embed(db, text):
+            return _vec(0)
+
+        monkeypatch.setattr(semantic_cache, "_embed_query", fake_embed)
+
+        assert asyncio.run(lookup_semantic_cache(db_session, 1, "问题A")) is None
 
     def test_orthogonal_question_misses(self, db_session):
         asyncio.run(store_semantic_cache(db_session, 1, "问题A", "回答A", "m", 100, 50, 0.001))

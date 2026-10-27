@@ -16,7 +16,7 @@
 import json
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
 from sqlalchemy import select
@@ -45,11 +45,18 @@ def _parse_embedding(value) -> list:
 
 
 _NUMBER_TOKEN_RE = re.compile(r"\d+(?:\.\d+)?")
+_ENTITY_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9._+-]+")
 
 
 def _numeric_tokens(question: str) -> set:
     """数字/岗位编号里的数字部分：变了就不是同一个问题，不能直接复用答案。"""
     return set(_NUMBER_TOKEN_RE.findall(question))
+
+
+def _entity_tokens(question: str) -> set:
+    """提取英文/型号类专有名词（BERT、CoT、GSM8K…），用于高相似度时的对象校验。"""
+    tokens = (token.strip("._+-").lower() for token in _ENTITY_TOKEN_RE.findall(question))
+    return {token for token in tokens if token}
 
 
 CACHEABLE_MAX_QUERY_CHARS = 80
@@ -64,6 +71,11 @@ MULTI_INTENT_MARKERS = (
     "顺便",
     "补充",
     "再问",
+    "对比",
+    "比较",
+    "区别",
+    "差异",
+    "异同",
 )
 
 
@@ -78,18 +90,22 @@ def is_cacheable_question(question: str) -> bool:
 
 
 def _python_scan(
-    db: Session, user_id: Optional[int], vector: list
-) -> Tuple[Optional[QACacheEntry], float]:
-    """sqlite / 无 pgvector 环境的回退：逐条计算余弦相似度取最优。"""
-    stmt = select(QACacheEntry)
+    db: Session, user_id: Optional[int], vector: list, limit: int
+) -> List[Tuple[QACacheEntry, float]]:
+    """sqlite / 无 pgvector 环境的回退：逐条算相似度，按高到低返回前 N 条。"""
+    stmt = select(QACacheEntry).where(QACacheEntry.embedding_model == settings.EMBEDDING_MODEL_NAME)
     if user_id is not None:
         stmt = stmt.where(QACacheEntry.user_id == user_id)
-    best_entry, best_similarity = None, -1.0
+    scored: List[Tuple[QACacheEntry, float]] = []
     for entry in db.execute(stmt).scalars():
-        similarity = _cosine_similarity(vector, _parse_embedding(entry.embedding))
-        if similarity > best_similarity:
-            best_entry, best_similarity = entry, similarity
-    return best_entry, best_similarity
+        try:
+            similarity = _cosine_similarity(vector, _parse_embedding(entry.embedding))
+        except Exception as exc:
+            logger.warning(f"语义缓存条目解析失败，已跳过 (id={entry.id}): {exc}")
+            continue
+        scored.append((entry, similarity))
+    scored.sort(key=lambda item: item[1], reverse=True)
+    return scored[:limit]
 
 
 async def _embed_query(db: Session, text: str) -> list:
@@ -159,72 +175,133 @@ async def lookup_semantic_cache(
     question: str,
     *,
     require_sources: bool = False,
+    query_vector: Optional[list] = None,
 ) -> Optional[Tuple[QACacheEntry, float]]:
     """查询语义缓存。命中返回 (条目, 相似度)，未命中/被禁用/出错返回 None。
 
-    require_sources=True 时，无来源快照的旧条目/聊天缓存按未命中处理，
-    让 RAG 重新检索并写入带来源的缓存。
+    依次检查最近 N 条候选，而不是只取 top1：最近一条可能因为数字/来源
+    守卫被拒，但后面仍有合法条目。require_sources=True 时，无来源快照的
+    旧条目/聊天缓存按未命中处理，让 RAG 重新检索并写入带来源的缓存。
     """
     if not settings.SEMANTIC_CACHE_ENABLED:
         return None
     if not is_cacheable_question(question):
         return None
-    try:
-        vector = await _embed_query(db, question)
-    except Exception as e:
-        logger.warning(f"语义缓存查询失败（embedding 不可用，跳过缓存）: {e}")
-        return None
 
-    try:
-        distance_expr = QACacheEntry.embedding.cosine_distance(vector).label("distance")
-        stmt = select(QACacheEntry, distance_expr)
-        if user_id is not None:
-            stmt = stmt.where(QACacheEntry.user_id == user_id)
-        stmt = stmt.order_by(distance_expr).limit(1)
-
-        row = db.execute(stmt).first()
-        if row is None:
+    if query_vector is None:
+        try:
+            query_vector = await _embed_query(db, question)
+        except Exception as e:
+            logger.warning(f"语义缓存查询失败（embedding 不可用，跳过缓存）: {e}")
             return None
 
-        entry, distance = row
-        similarity = 1.0 - float(distance)
+    limit = max(1, int(settings.SEMANTIC_CACHE_TOP_CANDIDATES))
+    candidates: List[Tuple[QACacheEntry, float]] = []
+    try:
+        distance_expr = QACacheEntry.embedding.cosine_distance(query_vector).label("distance")
+        stmt = select(QACacheEntry, distance_expr).where(
+            QACacheEntry.embedding_model == settings.EMBEDDING_MODEL_NAME
+        )
+        if user_id is not None:
+            stmt = stmt.where(QACacheEntry.user_id == user_id)
+        stmt = stmt.order_by(distance_expr).limit(limit)
+        rows = db.execute(stmt).all()
+        candidates = [(entry, 1.0 - float(distance)) for entry, distance in rows]
     except Exception:
         # sqlite / 未装 pgvector 扩展的环境：回退到 Python 端计算
         db.rollback()
-        entry, similarity = _python_scan(db, user_id, vector)
-        if entry is None:
+        try:
+            candidates = _python_scan(db, user_id, query_vector, limit)
+        except Exception as exc:
+            logger.warning(f"语义缓存回退扫描失败，跳过缓存: {exc}")
             return None
 
-    try:
+    if not candidates:
+        return None
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    cutoff = None
+    if settings.SEMANTIC_CACHE_TTL_DAYS > 0:
+        cutoff = now - timedelta(days=settings.SEMANTIC_CACHE_TTL_DAYS)
+
+    for entry, similarity in candidates:
         if similarity < settings.SEMANTIC_CACHE_CANDIDATE_THRESHOLD:
-            return None
+            continue
+        if cutoff is not None and entry.created_at and entry.created_at < cutoff:
+            logger.info(f"==> 语义缓存候选已过期 (id={entry.id}, 相似度 {similarity:.3f})")
+            continue
         if _numeric_tokens(entry.question) != _numeric_tokens(question):
-            logger.info("==> 语义缓存候选数字/岗位编号不一致，按未命中处理")
-            return None
+            logger.info("==> 语义缓存候选数字/岗位编号不一致，检查下一条")
+            continue
         if require_sources and not entry.source_chunks:
-            logger.info("==> 语义缓存候选缺少来源，RAG 查询按未命中处理")
-            return None
-        if similarity < settings.SEMANTIC_CACHE_THRESHOLD:
+            logger.info("==> 语义缓存候选缺少来源，检查下一条")
+            continue
+
+        # 专有名词变化（BERT→Transformer 等）即便高相似度也不能直接复用
+        needs_judge = similarity < settings.SEMANTIC_CACHE_THRESHOLD or (
+            _entity_tokens(entry.question) != _entity_tokens(question)
+        )
+        if needs_judge:
             same_question = await _judge_same_question(db, user_id, entry.question, question)
             logger.info(
-                f"==> 语义缓存灰区候选 (相似度 {similarity:.3f}, "
+                f"==> 语义缓存候选校验 (相似度 {similarity:.3f}, "
                 f"校验={'通过' if same_question else '拒绝'})"
             )
             if not same_question:
-                return None
+                continue
 
-        entry.hit_count += 1
-        entry.last_hit_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        db.commit()
+        try:
+            entry.hit_count += 1
+            entry.last_hit_at = now
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            logger.warning(f"语义缓存命中记账失败，跳过缓存: {exc}")
+            return None
+
         logger.info(
             f"==> 语义缓存命中 (相似度 {similarity:.3f}, "
             f"节省 ¥{entry.original_cost_cny:.4f}, 第 {entry.hit_count} 次命中)"
         )
         return entry, similarity
+
+    return None
+
+
+def _prune_user_cache(db: Session, user_id: Optional[int]) -> None:
+    """按 TTL 和单用户上限清理缓存；失败只告警，不影响本次写入。"""
+    if user_id is None:
+        return
+    try:
+        if settings.SEMANTIC_CACHE_TTL_DAYS > 0:
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+                days=settings.SEMANTIC_CACHE_TTL_DAYS
+            )
+            db.query(QACacheEntry).filter(
+                QACacheEntry.user_id == user_id,
+                QACacheEntry.created_at < cutoff,
+            ).delete(synchronize_session=False)
+
+        max_entries = int(settings.SEMANTIC_CACHE_MAX_ENTRIES_PER_USER)
+        if max_entries > 0:
+            stale_ids = [
+                row[0]
+                for row in (
+                    db.query(QACacheEntry.id)
+                    .filter(QACacheEntry.user_id == user_id)
+                    .order_by(QACacheEntry.created_at.desc())
+                    .offset(max_entries)
+                    .all()
+                )
+            ]
+            if stale_ids:
+                db.query(QACacheEntry).filter(QACacheEntry.id.in_(stale_ids)).delete(
+                    synchronize_session=False
+                )
+        db.commit()
     except Exception as e:
         db.rollback()
-        logger.warning(f"语义缓存查询失败（跳过缓存）: {e}")
-        return None
+        logger.warning(f"语义缓存清理失败（不影响对话）: {e}")
 
 
 async def store_semantic_cache(
@@ -237,6 +314,7 @@ async def store_semantic_cache(
     completion_tokens: int,
     original_cost_cny: float,
     source_chunks: Optional[List[str]] = None,
+    query_vector: Optional[list] = None,
 ) -> None:
     """把一轮成功问答写入缓存。失败静默降级，不影响对话。"""
     if not settings.SEMANTIC_CACHE_ENABLED:
@@ -244,7 +322,9 @@ async def store_semantic_cache(
     if not is_cacheable_question(question):
         return
     try:
-        vector = await _embed_query(db, question)
+        vector = query_vector
+        if vector is None:
+            vector = await _embed_query(db, question)
         db.add(
             QACacheEntry(
                 user_id=user_id,
@@ -253,12 +333,14 @@ async def store_semantic_cache(
                 source_chunks=source_chunks,
                 embedding=vector,
                 model_name=model_name,
+                embedding_model=settings.EMBEDDING_MODEL_NAME,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 original_cost_cny=original_cost_cny,
             )
         )
         db.commit()
+        _prune_user_cache(db, user_id)
         logger.info(f"==> 语义缓存已写入 (预计每次命中节省 ¥{original_cost_cny:.4f})")
     except Exception as e:
         db.rollback()
@@ -299,7 +381,7 @@ def get_cache_stats(db: Session, user_id: Optional[int]) -> dict:
     stmt = select(
         QACacheEntry.hit_count,
         QACacheEntry.original_cost_cny,
-    )
+    ).where(QACacheEntry.embedding_model == settings.EMBEDDING_MODEL_NAME)
     if user_id is not None:
         stmt = stmt.where(QACacheEntry.user_id == user_id)
     rows = db.execute(stmt).all()

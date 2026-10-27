@@ -67,10 +67,14 @@ class Settings(BaseSettings):
 
     # 语义缓存：相似问题命中缓存则免调用 LLM（省钱 + 降延迟）
     SEMANTIC_CACHE_ENABLED: bool = True
-    # 阈值与 embedding 模型强相关：bge-m3 相似度分布偏高（同义改写 ~0.9+）用 0.92；
-    # text-embedding-v4 分布偏低（实测同义改写 ~0.74、无关问题 ~0.19）用 0.65
+    # 阈值与 embedding 模型强相关，调整前必须跑 evaluation/：
+    # 线上 text-embedding-v4 同义改写实测约 0.84–1.00，无关问题多数低于 0.80；
+    # ≥0.95 直接命中，0.80–0.95 由短 LLM 校验；专有名词/数字不一致还会额外校验。
     SEMANTIC_CACHE_THRESHOLD: float = 0.95  # 高置信度直接命中
     SEMANTIC_CACHE_CANDIDATE_THRESHOLD: float = 0.80  # 灰区下限，低于此值不校验
+    SEMANTIC_CACHE_TOP_CANDIDATES: int = 3  # 最近 N 条逐条过守卫，避免 top1 被拒就整体未命中
+    SEMANTIC_CACHE_TTL_DAYS: int = 30  # 条目超过该天数不再命中，写入时顺带清理
+    SEMANTIC_CACHE_MAX_ENTRIES_PER_USER: int = 200  # 单用户缓存上限，防止无限增长
 
     # 闲时批量任务（Celery beat 每天 22:30 北京时间触发，落在百炼闲时窗口）
     SUMMARIZE_MAX_DOCS_PER_RUN: int = 5  # 每轮最多摘要的文档数

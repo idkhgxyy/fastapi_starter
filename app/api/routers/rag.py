@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, get_db
+from app.core.logging import logger
 from app.schemas.rag import DocumentResponse, RAGQueryRequest, RAGQueryResponse
 from app.services.cost_guard import budget_reject_message, check_budget
 from app.services.llm_observability_service import (
@@ -203,28 +204,53 @@ async def query_knowledge_base(
     if not budget.allowed:
         raise HTTPException(status_code=402, detail=budget_reject_message(budget))
 
-    # 语义缓存：相同/相似查询直接复用历史答案
-    cache_hit = await lookup_semantic_cache(
-        db, current_user.id, request.query, require_sources=True
-    )
-    if cache_hit is not None:
-        entry, similarity = cache_hit
-        return RAGQueryResponse(
-            query=request.query,
-            answer=(
-                f"（缓存命中 · 相似度 {similarity:.0%} · 已节省 ¥{entry.original_cost_cny:.4f}）\n\n"
-                f"{entry.answer}"
-            ),
-            source_chunks=entry.source_chunks or [],
-        )
-
     rag_service = RAGService(db)
+    session_history = []
+    if request.session_id:
+        session_history = await load_session_history(current_user.id, request.session_id)
+    is_first_turn = not session_history
+
+    # 查询向量只算一次，缓存查询/检索/写缓存复用，避免三次 embedding
+    query_vector = None
+    try:
+        query_vector = (await rag_service.get_embeddings([request.query]))[0]
+    except Exception as exc:
+        logger.warning(f"RAG 查询向量化失败，后续检索将重试: {exc}")
+
+    # 语义缓存只在会话首轮读写：多轮回答依赖上文，复用会张冠李戴
+    if is_first_turn and query_vector is not None:
+        cache_hit = await lookup_semantic_cache(
+            db,
+            current_user.id,
+            request.query,
+            require_sources=True,
+            query_vector=query_vector,
+        )
+        if cache_hit is not None:
+            entry, similarity = cache_hit
+            if request.session_id:
+                await append_session_message(
+                    current_user.id, request.session_id, "user", request.query
+                )
+                await append_session_message(
+                    current_user.id, request.session_id, "assistant", entry.answer
+                )
+            return RAGQueryResponse(
+                query=request.query,
+                answer=(
+                    f"（缓存命中 · 相似度 {similarity:.0%} · 已节省 ¥{entry.original_cost_cny:.4f}）\n\n"
+                    f"{entry.answer}"
+                ),
+                source_chunks=entry.source_chunks or [],
+            )
+
     started_at = start_timer()
     try:
         knowledge = await rag_service.build_knowledge_context(
             query=request.query,
             owner_id=current_user.id,
             top_k=request.top_k,
+            query_vector=query_vector,
         )
 
         if not knowledge.context:
@@ -253,7 +279,6 @@ async def query_knowledge_base(
         ]
 
         if request.session_id:
-            session_history = await load_session_history(current_user.id, request.session_id)
             messages = (
                 [{"role": "system", "content": system_prompt}]
                 + session_history
@@ -289,18 +314,20 @@ async def query_knowledge_base(
             model_name=llm_info.model_name,
             provider="rag_query",
         )
-        # 语义缓存写入（供 /rag/query 与聊天链路复用）
-        await store_semantic_cache(
-            db,
-            current_user.id,
-            request.query,
-            response_text,
-            llm_info.model_name,
-            prompt_tokens,
-            completion_tokens,
-            estimate_cost_cny(db, llm_info.model_name, prompt_tokens, completion_tokens),
-            source_chunks=knowledge.source_labels(),
-        )
+        # 语义缓存只在首轮写入（多轮回答依赖上文，不能复用）
+        if is_first_turn:
+            await store_semantic_cache(
+                db,
+                current_user.id,
+                request.query,
+                response_text,
+                llm_info.model_name,
+                prompt_tokens,
+                completion_tokens,
+                estimate_cost_cny(db, llm_info.model_name, prompt_tokens, completion_tokens),
+                source_chunks=knowledge.source_labels(),
+                query_vector=query_vector,
+            )
 
         return RAGQueryResponse(
             query=request.query, answer=response_text, source_chunks=knowledge.source_labels()
@@ -345,27 +372,52 @@ async def query_knowledge_base_stream(
     if not budget.allowed:
         raise HTTPException(status_code=402, detail=budget_reject_message(budget))
 
-    # 语义缓存：命中则回放历史答案，不调 LLM
-    cache_hit = await lookup_semantic_cache(
-        db, current_user.id, request.query, require_sources=True
-    )
-    if cache_hit is not None:
-        entry, similarity = cache_hit
-        note = f"（缓存命中 · 相似度 {similarity:.0%} · 已节省 ¥{entry.original_cost_cny:.4f}）\n\n"
-
-        async def _replay():
-            yield _sse({"content": note})
-            yield _sse({"content": entry.answer})
-            yield _sse({"source_chunks": entry.source_chunks or []})
-            yield "data: [DONE]\n\n"
-
-        return StreamingResponse(_replay(), media_type="text/event-stream")
-
     rag_service = RAGService(db)
+    session_history = []
+    if request.session_id:
+        session_history = await load_session_history(current_user.id, request.session_id)
+    is_first_turn = not session_history
+
+    # 查询向量只算一次，缓存查询/检索/写缓存复用，避免三次 embedding
+    query_vector = None
+    try:
+        query_vector = (await rag_service.get_embeddings([request.query]))[0]
+    except Exception as exc:
+        logger.warning(f"RAG 查询向量化失败，后续检索将重试: {exc}")
+
+    # 语义缓存只在会话首轮读写：多轮回答依赖上文，复用会张冠李戴
+    if is_first_turn and query_vector is not None:
+        cache_hit = await lookup_semantic_cache(
+            db,
+            current_user.id,
+            request.query,
+            require_sources=True,
+            query_vector=query_vector,
+        )
+        if cache_hit is not None:
+            entry, similarity = cache_hit
+            note = f"（缓存命中 · 相似度 {similarity:.0%} · 已节省 ¥{entry.original_cost_cny:.4f}）\n\n"
+
+            async def _replay():
+                if request.session_id:
+                    await append_session_message(
+                        current_user.id, request.session_id, "user", request.query
+                    )
+                    await append_session_message(
+                        current_user.id, request.session_id, "assistant", entry.answer
+                    )
+                yield _sse({"content": note})
+                yield _sse({"content": entry.answer})
+                yield _sse({"source_chunks": entry.source_chunks or []})
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(_replay(), media_type="text/event-stream")
+
     knowledge = await rag_service.build_knowledge_context(
         query=request.query,
         owner_id=current_user.id,
         top_k=request.top_k,
+        query_vector=query_vector,
     )
 
     if not knowledge.context:
@@ -401,7 +453,6 @@ async def query_knowledge_base_stream(
         ]
 
         if request.session_id:
-            session_history = await load_session_history(current_user.id, request.session_id)
             await append_session_message(current_user.id, request.session_id, "user", request.query)
             stream_messages = (
                 [{"role": "system", "content": system_prompt}]
@@ -451,7 +502,7 @@ async def query_knowledge_base_stream(
                 model_name=llm_info.model_name,
                 provider="rag_query",
             )
-            if full_response:
+            if full_response and is_first_turn:
                 await store_semantic_cache(
                     db,
                     current_user.id,
@@ -462,6 +513,7 @@ async def query_knowledge_base_stream(
                     completion_tokens,
                     cost_cny,
                     source_chunks=source_chunk_contents,
+                    query_vector=query_vector,
                 )
 
             yield _sse({"source_chunks": source_chunk_contents})
