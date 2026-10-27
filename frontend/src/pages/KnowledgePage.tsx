@@ -1,8 +1,15 @@
 import { useState, useEffect, useRef, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { Document } from '@/types'
-import { listDocuments, uploadDocument, deleteDocument } from '@/services/ragService'
-import { IconFile, IconUpload, IconTrash, IconRefresh } from '@/components/ui/Icons'
+import {
+  deleteDocument,
+  listDocuments,
+  queryKnowledgeBase,
+  uploadDocument,
+} from '@/services/ragService'
+import { IconFile, IconRefresh, IconSend, IconTrash, IconUpload } from '@/components/ui/Icons'
 import { statusLabels, statusColors } from '@/components/knowledge/constants'
 
 export default function KnowledgePage() {
@@ -12,6 +19,11 @@ export default function KnowledgePage() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
+  const [question, setQuestion] = useState('')
+  const [answer, setAnswer] = useState('')
+  const [sourceChunks, setSourceChunks] = useState<string[]>([])
+  const [asking, setAsking] = useState(false)
+  const [askError, setAskError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   async function loadDocs() {
@@ -53,6 +65,24 @@ export default function KnowledgePage() {
     }
   }
 
+  async function handleAsk() {
+    const trimmed = question.trim()
+    if (!trimmed || asking) return
+    setAsking(true)
+    setAskError('')
+    setAnswer('')
+    setSourceChunks([])
+    try {
+      const result = await queryKnowledgeBase(trimmed, 3)
+      setAnswer(result.answer)
+      setSourceChunks(result.source_chunks || [])
+    } catch {
+      setAskError('提问失败，请检查后端服务后重试')
+    } finally {
+      setAsking(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
       <header className="h-14 border-b border-[var(--border-primary)] bg-[var(--bg-secondary)] flex items-center px-6 gap-4">
@@ -73,6 +103,64 @@ export default function KnowledgePage() {
         </div>
 
         {error && <p className="text-sm text-[var(--color-error)] bg-[var(--color-error)]/10 rounded-lg px-3 py-2">{error}</p>}
+
+        <section className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-medium text-[var(--text-primary)]">问知识库</h2>
+              <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                基于已就绪文档回答，并返回命中的来源片段
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
+              placeholder="问知识库，例如：这份文档的核心结论是什么？"
+              className="flex-1 h-10 px-3 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
+            />
+            <button
+              type="button"
+              onClick={handleAsk}
+              disabled={!question.trim() || asking}
+              className="h-10 px-4 rounded-lg bg-brand-500 text-white text-sm font-medium hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-2"
+            >
+              <IconSend />
+              {asking ? '回答中...' : '提问'}
+            </button>
+          </div>
+          {askError && (
+            <p className="text-sm text-[var(--color-error)] bg-[var(--color-error)]/10 rounded-lg px-3 py-2">
+              {askError}
+            </p>
+          )}
+          {answer && (
+            <div className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-4">
+              <div className="prose prose-sm max-w-none text-[var(--text-primary)]">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{answer}</ReactMarkdown>
+              </div>
+            </div>
+          )}
+          {sourceChunks.length > 0 && (
+            <details open className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)]">
+              <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+                来源片段 ({sourceChunks.length})
+              </summary>
+              <div className="px-3 pb-3 space-y-2 max-h-72 overflow-y-auto">
+                {sourceChunks.map((source, index) => (
+                  <pre
+                    key={index}
+                    className="whitespace-pre-wrap break-words rounded-md bg-[var(--bg-secondary)] p-3 text-xs leading-relaxed text-[var(--text-secondary)]"
+                  >
+                    {source}
+                  </pre>
+                ))}
+              </div>
+            </details>
+          )}
+        </section>
 
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-[var(--text-primary)]">文档列表 ({docs.length})</h2>

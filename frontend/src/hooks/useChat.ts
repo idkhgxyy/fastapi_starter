@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { Message } from '@/types'
 import type { ConversationMessage, ConversationSummary } from '@/services/conversationService'
 import {
@@ -31,6 +31,8 @@ export function useChat() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [loadingConversations, setLoadingConversations] = useState(true)
   const [conversationsError, setConversationsError] = useState('')
+  // 用户已经选/新开/发送后，首屏的历史恢复不能再覆盖当前消息
+  const interactedRef = useRef(false)
 
   const refreshConversations = useCallback(async () => {
     try {
@@ -49,6 +51,7 @@ export function useChat() {
   const selectConversation = useCallback(
     async (id: number) => {
       if (isStreaming) return
+      interactedRef.current = true
       try {
         const detail = await getConversation(id)
         setConversationId(id)
@@ -64,6 +67,7 @@ export function useChat() {
 
   const newConversation = useCallback(() => {
     if (isStreaming) return
+    interactedRef.current = true
     setConversationId(null)
     setMessages([])
     localStorage.removeItem(LAST_CONVERSATION_KEY)
@@ -71,6 +75,7 @@ export function useChat() {
 
   const removeConversation = useCallback(
     async (id: number) => {
+      interactedRef.current = true
       try {
         await deleteConversationApi(id)
       } catch {
@@ -92,7 +97,7 @@ export function useChat() {
     let cancelled = false
     ;(async () => {
       const data = await refreshConversations()
-      if (cancelled) return
+      if (cancelled || interactedRef.current) return
       const saved = Number(localStorage.getItem(LAST_CONVERSATION_KEY))
       if (!saved || !data.some((item) => item.id === saved)) {
         localStorage.removeItem(LAST_CONVERSATION_KEY)
@@ -100,7 +105,7 @@ export function useChat() {
       }
       try {
         const detail = await getConversation(saved)
-        if (cancelled) return
+        if (cancelled || interactedRef.current) return
         setConversationId(saved)
         setMessages(detail.messages.map(toUiMessage))
       } catch {
@@ -115,6 +120,7 @@ export function useChat() {
   const sendMessage = useCallback(
     async (content: string) => {
       if (!content.trim() || isStreaming) return
+      interactedRef.current = true
 
       // 没有会话就先建一个：只有真正发消息才会产生会话，避免一堆空会话
       let cid = conversationId

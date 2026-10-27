@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, type ChangeEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { Document } from '@/types'
 import { listDocuments, uploadDocument, deleteDocument, searchKnowledgeBase, type SearchResultItem } from '@/services/ragService'
 import { IconFile, IconUpload, IconTrash, IconSearch, IconRefresh, IconX } from '@/components/ui/Icons'
@@ -18,6 +19,7 @@ function apiErrorMessage(err: unknown, fallback: string): string {
 }
 
 export default function KnowledgePanel() {
+  const navigate = useNavigate()
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -131,6 +133,14 @@ export default function KnowledgePanel() {
       </div>
 
       {error && <p className="text-sm text-[var(--color-error)] bg-[var(--color-error)]/10 rounded-lg px-3 py-2">{error}</p>}
+
+      <button
+        type="button"
+        onClick={() => navigate('/knowledge')}
+        className="w-full text-left text-xs text-brand-500 hover:text-brand-400 transition-colors"
+      >
+        打开完整知识库 / 问答 →
+      </button>
 
       <div>
         <div className="relative">

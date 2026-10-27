@@ -29,6 +29,9 @@ SCREENSHOT = os.getenv(
 SUCCESS_SCREENSHOT = os.getenv(
     "UI_SMOKE_SUCCESS_SCREENSHOT", "evaluation/artifacts/ui_smoke_success.png"
 )
+QA_SCREENSHOT = os.getenv(
+    "UI_SMOKE_QA_SCREENSHOT", "evaluation/artifacts/ui_smoke_qa_success.png"
+)
 TIMEOUT = int(os.getenv("UI_SMOKE_TIMEOUT_MS", "180000"))
 
 
@@ -110,7 +113,7 @@ def main() -> int:
         with httpx.Client(base_url=BASE_URL, timeout=30) as client:
             health = client.get("/api/v1/health/")
             _check(health.status_code == 200, f"健康检查失败: HTTP {health.status_code}")
-        print("[PASS] 1/6 健康检查")
+        print("[PASS] 1/7 健康检查")
         token = _login_or_register()
 
         playwright = sync_playwright().start()
@@ -128,7 +131,7 @@ def main() -> int:
         page.locator("button[type='submit']").click()
         page.wait_for_url("**/chat", timeout=TIMEOUT)
         page.wait_for_selector("textarea[placeholder='输入消息，按 Enter 发送...']")
-        print("[PASS] 2/6 登录页登录并进入 /chat")
+        print("[PASS] 2/7 登录页登录并进入 /chat")
 
         page.locator("nav button").first.click()
         page.wait_for_selector("aside")
@@ -138,7 +141,7 @@ def main() -> int:
         page.locator("aside").get_by_text("就绪").first.wait_for(
             state="visible", timeout=180000
         )
-        print(f"[PASS] 3/6 侧栏上传并等到就绪（{filename}）")
+        print(f"[PASS] 3/7 侧栏上传并等到就绪（{filename}）")
 
         search = page.locator("aside input[placeholder='搜索知识库...']").first
         search.fill("部署验收码")
@@ -149,10 +152,28 @@ def main() -> int:
         page.locator("aside").get_by_text(code).first.wait_for(
             state="visible", timeout=60000
         )
-        print("[PASS] 4/6 知识库搜索命中验收码")
+        print("[PASS] 4/7 知识库搜索命中验收码")
 
-        page.locator("nav button").first.click()
-        page.wait_for_timeout(300)
+        page.locator("aside").get_by_text("打开完整知识库 / 问答 →").first.click()
+        page.wait_for_url("**/knowledge", timeout=TIMEOUT)
+        qa_input = page.locator("input[placeholder^='问知识库']").first
+        qa_input.fill("部署验收码是什么？")
+        qa_input.press("Enter")
+        page.locator(".prose").filter(has_text=code).last.wait_for(
+            state="visible", timeout=180000
+        )
+        page.locator("summary").filter(has_text="来源片段").first.wait_for(
+            state="visible", timeout=60000
+        )
+        page.locator("details").filter(has_text=code).first.wait_for(
+            state="visible", timeout=60000
+        )
+        os.makedirs(os.path.dirname(QA_SCREENSHOT), exist_ok=True)
+        page.screenshot(path=QA_SCREENSHOT, full_page=True)
+        print(f"[PASS] 5/7 知识库问答返回答案和来源片段（截图 {QA_SCREENSHOT}）")
+
+        page.locator("button").filter(has_text="返回").first.click()
+        page.wait_for_url("**/chat", timeout=TIMEOUT)
         chat_input = page.locator(
             "textarea[placeholder='输入消息，按 Enter 发送...']"
         ).first
@@ -172,12 +193,12 @@ def main() -> int:
             timeout=TIMEOUT,
         )
         page.get_by_text("正在思考...").first.wait_for(state="hidden", timeout=5000)
-        print("[PASS] 5/6 对话框提问、流式结束并看到带验收码的回答")
+        print("[PASS] 6/7 对话框提问、流式结束并看到带验收码的回答")
 
         os.makedirs(os.path.dirname(SUCCESS_SCREENSHOT), exist_ok=True)
         page.screenshot(path=SUCCESS_SCREENSHOT, full_page=True)
         _check(not page_errors, f"页面有未捕获异常: {page_errors[:3]}")
-        print(f"[PASS] 6/6 无未捕获前端异常（截图 {SUCCESS_SCREENSHOT}）")
+        print(f"[PASS] 7/7 无未捕获前端异常（截图 {SUCCESS_SCREENSHOT}）")
         return 0
     except Exception as exc:
         print(f"[FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
