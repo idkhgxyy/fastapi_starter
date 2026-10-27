@@ -1,0 +1,13 @@
+{"id": "transformer-bleu", "user": "gxyy@local.dev", "question": "Transformer 在 WMT 2014 英德翻译任务上达到多少 BLEU？", "expected_documents": ["Attention Is All You Need (Transformer).pdf"], "expected_all": ["28.4"]}
+{"id": "bert-objective", "user": "gxyy@local.dev", "question": "BERT 的预训练目标是什么？", "expected_documents": ["BERT.pdf"], "expected_any": ["Masked Language Model", "MLM", "掩码语言模型"]}
+{"id": "bert-glue", "user": "gxyy@local.dev", "question": "BERT 在 GLUE 上取得了多少分？", "expected_documents": ["BERT.pdf"], "expected_all": ["80.5"]}
+{"id": "cot-gsm8k", "user": "gxyy@local.dev", "question": "Chain-of-Thought 用多少示例在 GSM8K 上取得最优？", "expected_documents": ["Chain-of-Thought Prompting.pdf"], "expected_all": ["GSM8K"], "expected_any": ["8", "八"]}
+{"id": "rag-memory", "user": "gxyy@local.dev", "question": "RAG 把哪两种记忆结合起来？", "expected_documents": ["RAG 原始论文.pdf"], "expected_groups": [["参数", "parametric"], ["非参数", "non-parametric"]]}
+{"id": "ielts-long-goal", "user": "test@example.com", "question": "雅思长线备考计划的目标分数和周期是什么？", "expected_documents": ["雅思长线备考计划.md"], "expected_all": ["6.5", "7.0"], "expected_any": ["5个月", "五个月", "5 个月"]}
+{"id": "ielts-full-budget", "user": "test@example.com", "question": "雅思备考完全计划的资料预算大约是多少？", "expected_documents": ["雅思备考完全计划.md"], "expected_any": ["300"]}
+{"id": "course-plan-assessment", "user": "test@example.com", "question": "数据结构与算法课程设计实施方案的考核构成是什么？", "expected_documents": ["2-数据结构与算法课程设计方案计科软件等专业2026夏级实施方案(1).docx"], "expected_all": ["20%", "40%"], "expected_any": ["现场汇报", "汇报"]}
+{"id": "course-topics-llm", "user": "test@example.com", "question": "课程设计参考题目里有哪些结合大模型 API 的题目？", "expected_documents": ["数据结构与算法课程设计参考题目及要求2026.docx"], "expected_any": ["Trie", "敏感词", "状态机", "优先队列", "提词器"]}
+{"id": "jd-106366-language", "user": "test@example.com", "question": "J106366 这个岗位要求什么编程语言？", "expected_documents": ["jd-baidu-J106366-map-agent-harness.md"], "expected_any": ["Go", "Golang"]}
+{"id": "jd-103363-stack", "user": "test@example.com", "question": "J103363 这个岗位要求哪些技术栈？", "expected_documents": ["jd-baidu-J103363-ai-open-platform.md"], "expected_all": ["Java", "Spring", "MySQL", "Redis"]}
+{"id": "jd-98299-education", "user": "test@example.com", "question": "J98299 这个岗位的学历要求是什么？", "expected_documents": ["jd-baidu-J98299-apollo-backend.md"], "expected_any": ["985", "211"]}
+{"id": "jd-78567-db", "user": "test@example.com", "question": "网易 78567 岗位要求掌握哪些数据库和中间件？", "expected_documents": ["jd-netease-78567-server-intern.md"], "expected_all": ["MySQL", "Redis"], "expected_any": ["PostgreSQL", "MongoDB", "Elasticsearch", "消息队列"]}

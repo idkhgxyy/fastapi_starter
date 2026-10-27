@@ -6,7 +6,8 @@
 
 - `rag_eval_set.jsonl`：27 条检索题，覆盖 4 篇 arXiv 和 15 篇雅思/课设/JD。
 - `rag_cache_eval_set.jsonl`：8 组缓存对照，每组包含同义改写（应命中）和负数（应拒绝）。
-- `../scripts/rag_eval.py`：runner。
+- `answer_eval_set.jsonl`：13 条答案质量题，检查回答是否包含预期事实。
+- `../scripts/rag_eval.py`、`../scripts/answer_eval.py`：runner。
 
 ## 运行
 
@@ -35,6 +36,16 @@ docker compose exec -w /app -e PYTHONPATH=/app api python scripts/rag_eval.py --
 - 缓存：pairs=8，paraphrase_hit=1.00，negative_reject=1.00。
 
 改检索、切块或缓存逻辑后重跑，对比这两行即可。新增/修改文档时同步更新 `expected_documents` 的文件名。
+
+## 答案质量
+
+```bash
+make answer-eval
+# 或
+docker compose exec -w /app -e PYTHONPATH=/app api python scripts/answer_eval.py
+```
+
+直接调用 `RAGService` + 真实 LLM，检查回答中的事实关键词；不经过 HTTP/缓存，也不写 `llm_call_logs`。基线（2026-10-27）：13 题，source_hit=1.00，answer_hit=1.00，平均 2315ms，总成本约 ¥0.054。它验证的是“检索内容能否被正确复述”，不是通用回答质量或事实推理能力。
 
 ## 部署后冒烟
 

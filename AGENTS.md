@@ -14,6 +14,7 @@ FastAPI + SQLAlchemy 2 + PostgreSQL/pgvector + Redis + Celery/beat + React/Vite�
 - RAG/缓存评测：`docker compose exec -w /app -e PYTHONPATH=/app api python scripts/rag_eval.py`（需要真实知识库；`--skip-cache` 只跑检索）
 - 部署后冒烟：`make smoke`（或服务器上 `docker exec -w /app -e PYTHONPATH=/app fastapi-starter-api python scripts/smoke_test.py`）；专用 `smoke@example.com` 账号，覆盖健康/上传/RAG/缓存/流式/清理
 - 浏览器冒烟：本机 `/usr/bin/python3 scripts/ui_smoke_test.py`；服务器前端只监听 127.0.0.1，先建隧道 `ssh -N -L 18081:127.0.0.1:8000 ubuntu@YOUR_SERVER`，再设 `UI_SMOKE_BASE_URL=http://127.0.0.1:18081`
+- 答案质量评测：`make answer-eval`（真实 LLM，13 条事实题，成本约 ¥0.05；不写 `llm_call_logs`）
 - 备份：服务器 cron 每日 03:30 跑 `scripts/backup_db_docker.sh`，保留 14 天；`make backup` 立即备份，`make backup-pull` 拉到本地 `backups/`（gitignored）
 - 迁移：改 `app/models/` 后 `alembic revision --autogenerate -m "..."` → 审查 → `alembic upgrade head`；新模型要在 `app/models/__init__.py` 导入
 - 前端：`cd frontend && npm run build`；不要在 2G 服务器上构建
