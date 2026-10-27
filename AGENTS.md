@@ -12,6 +12,7 @@ FastAPI + SQLAlchemy 2 + PostgreSQL/pgvector + Redis + Celery/beat + React/Vite�
   - 等价命令：`docker compose exec -e DATABASE_URL='sqlite:///:memory:' api pytest tests/ -q`
 - 格式与静态检查：`docker compose exec api ruff format app tests && docker compose exec api ruff check app tests`
 - RAG/缓存评测：`docker compose exec -w /app -e PYTHONPATH=/app api python scripts/rag_eval.py`（需要真实知识库；`--skip-cache` 只跑检索）
+- 部署后冒烟：`make smoke`（或服务器上 `docker exec -w /app -e PYTHONPATH=/app fastapi-starter-api python scripts/smoke_test.py`）；专用 `smoke@example.com` 账号，覆盖健康/上传/RAG/缓存/流式/清理
 - 迁移：改 `app/models/` 后 `alembic revision --autogenerate -m "..."` → 审查 → `alembic upgrade head`；新模型要在 `app/models/__init__.py` 导入
 - 前端：`cd frontend && npm run build`；不要在 2G 服务器上构建
 - 依赖：运行时写 `requirements.txt`，测试/开发写 `requirements-dev.txt`；改依赖必须重建镜像
@@ -56,4 +57,5 @@ FastAPI + SQLAlchemy 2 + PostgreSQL/pgvector + Redis + Celery/beat + React/Vite�
 - 改后端：跑相关 pytest，必要时全量 `make test`
 - 改前端：至少 `npm run build`
 - 改 RAG / Agent：用真实文档走一遍检索或目标任务，对照原文核对结果
+- 部署后：跑 `make smoke`（或服务器上的 smoke_test.py），失败按真实故障处理
 - 没有实际输出/run 证据，不要说“已验证”；CI 是否绿以真实 run 为准

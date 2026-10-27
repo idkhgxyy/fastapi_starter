@@ -29,9 +29,21 @@ docker compose exec -w /app -e PYTHONPATH=/app api python scripts/rag_eval.py --
 - `cache paraphrase_hit`：同义改写命中率。
 - `cache negative_reject`：换实体/数字/多意图的拒绝率。
 
-## 基线（2026-10-26）
+## 基线（2026-10-27）
 
 - 检索：n=27，recall@3=1.00，MRR=0.963，keyword_hit=1.00，evidence_hit=1.00。
 - 缓存：pairs=8，paraphrase_hit=1.00，negative_reject=1.00。
 
 改检索、切块或缓存逻辑后重跑，对比这两行即可。新增/修改文档时同步更新 `expected_documents` 的文件名。
+
+## 部署后冒烟
+
+评测集验证检索/缓存内部，不覆盖 HTTP、登录、上传、Celery 和流式。部署后另跑：
+
+```bash
+make smoke
+# 服务器上：
+sudo docker exec -w /app -e PYTHONPATH=/app fastapi-starter-api python scripts/smoke_test.py
+```
+
+脚本使用专用 `smoke@example.com` 账号（首次自动注册，可用 `SMOKE_EMAIL`/`SMOKE_PASSWORD` 覆盖；默认账号只适合本机/内网），上传一篇唯一事实的临时文档，验证健康检查、ready、真实 RAG、缓存命中、换数字拒绝、流式 `[DONE]` 和清理；任何一步失败返回非 0。

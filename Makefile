@@ -1,4 +1,4 @@
-.PHONY: help setup up down restart logs seed test shell ollama-pull clean
+.PHONY: help setup up down restart logs seed test smoke shell ollama-pull clean
 
 help: ## 显示帮助信息
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -30,6 +30,9 @@ seed: ## 灌入 demo 数据（demo@example.com / demo123456）
 
 test: ## 运行 pytest 测试（强制内存 sqlite，绝不动真实库）
 	docker compose exec -e DATABASE_URL='sqlite:///:memory:' api pytest tests/ -v
+
+smoke: ## 真实 HTTP 冒烟（专用账号 + 临时文档，验证上传/RAG/缓存/流式）
+	docker compose exec -w /app -e PYTHONPATH=/app api python scripts/smoke_test.py
 
 shell: ## 进入 API 容器 shell
 	docker compose exec api bash
