@@ -7,8 +7,8 @@
 
 覆盖：健康检查、登录/自动注册、上传到 ready、真实 RAG 回答、语义缓存命中、
 换数字缓存拒绝、流式来源与 [DONE] 收尾、清理临时文档。失败返回非 0。
-专用验收账号只访问自己的数据；账号已存在时直接登录。默认账号仅用于内网冒烟，
-生产可设 SMOKE_EMAIL / SMOKE_PASSWORD 覆盖。
+专用验收账号只访问自己的数据；账号已存在时直接登录。SMOKE_PASSWORD 必须由
+环境变量或本地 .env 提供，脚本不内置默认密码。
 """
 
 import json
@@ -16,15 +16,35 @@ import os
 import sys
 import time
 import uuid
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import httpx
 
 BASE_URL = os.getenv("SMOKE_BASE_URL", "http://127.0.0.1:8000")
 EMAIL = os.getenv("SMOKE_EMAIL", "smoke@example.com")
-PASSWORD = os.getenv("SMOKE_PASSWORD", "smoke-test-password-2026")
 USERNAME = os.getenv("SMOKE_USERNAME", "smoke-tester")
 TIMEOUT = float(os.getenv("SMOKE_TIMEOUT", "180"))
+
+
+def _env_value(key: str) -> str:
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if not env_path.exists():
+        return ""
+    for raw in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        if line.startswith(f"{key}="):
+            return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return ""
+
+
+PASSWORD = os.getenv("SMOKE_PASSWORD") or _env_value("SMOKE_PASSWORD")
+if not PASSWORD:
+    raise SystemExit(
+        "SMOKE_PASSWORD 未设置：请在环境变量或本地 .env 中配置（不要写进仓库）"
+    )
 
 
 class SmokeFailure(RuntimeError):

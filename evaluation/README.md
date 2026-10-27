@@ -46,7 +46,7 @@ make smoke
 sudo docker exec -w /app -e PYTHONPATH=/app fastapi-starter-api python scripts/smoke_test.py
 ```
 
-脚本使用专用 `smoke@example.com` 账号（首次自动注册，可用 `SMOKE_EMAIL`/`SMOKE_PASSWORD` 覆盖；默认账号只适合本机/内网），上传一篇唯一事实的临时文档，验证健康检查、ready、真实 RAG、缓存命中、换数字拒绝、流式 `[DONE]` 和清理；任何一步失败返回非 0。
+脚本使用专用 `smoke@example.com` 账号（首次自动注册；`SMOKE_PASSWORD` 必须由环境变量或本地 `.env` 提供，脚本不内置默认密码），上传一篇唯一事实的临时文档，验证健康检查、ready、真实 RAG、缓存命中、换数字拒绝、流式 `[DONE]` 和清理；任何一步失败返回非 0。
 
 浏览器层（需本机 Playwright）：
 

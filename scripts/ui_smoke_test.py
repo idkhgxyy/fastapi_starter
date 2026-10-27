@@ -4,8 +4,9 @@
 
     UI_SMOKE_BASE_URL=http://127.0.0.1:18081 /usr/bin/python3 scripts/ui_smoke_test.py
 
-覆盖：登录页登录、侧栏上传并等待“就绪”、知识库搜索命中、对话框提问并看到
-带验收码的回答、清理临时文档。任何一步失败返回非 0，并保存失败截图。
+覆盖：登录页登录、侧栏上传并等待“就绪”、知识库搜索、知识库问答与来源、
+对话框流式结束、清理临时文档。任何一步失败返回非 0，并保存失败截图。
+SMOKE_PASSWORD 必须由环境变量或本地 .env 提供，脚本不内置默认密码。
 服务器前端只监听 127.0.0.1 时，先建隧道：
     ssh -N -L 18081:127.0.0.1:8000 ubuntu@YOUR_SERVER
 """
@@ -14,6 +15,7 @@ import os
 import sys
 import time
 import uuid
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -21,8 +23,27 @@ from playwright.sync_api import sync_playwright
 
 BASE_URL = os.getenv("UI_SMOKE_BASE_URL", "http://127.0.0.1:8000")
 EMAIL = os.getenv("SMOKE_EMAIL", "smoke@example.com")
-PASSWORD = os.getenv("SMOKE_PASSWORD", "smoke-test-password-2026")
 USERNAME = os.getenv("SMOKE_USERNAME", "smoke-tester")
+
+
+def _env_value(key: str) -> str:
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if not env_path.exists():
+        return ""
+    for raw in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        if line.startswith(f"{key}="):
+            return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return ""
+
+
+PASSWORD = os.getenv("SMOKE_PASSWORD") or _env_value("SMOKE_PASSWORD")
+if not PASSWORD:
+    raise SystemExit(
+        "SMOKE_PASSWORD 未设置：请在环境变量或本地 .env 中配置（不要写进仓库）"
+    )
 SCREENSHOT = os.getenv(
     "UI_SMOKE_SCREENSHOT", "evaluation/artifacts/ui_smoke_failure.png"
 )
