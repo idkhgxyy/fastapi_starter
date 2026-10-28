@@ -38,10 +38,10 @@ export default function Navbar({ onToggleSidebar }: { onToggleSidebar: () => voi
 
       <div className="flex items-center gap-2.5">
         <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--text-primary)] text-[var(--bg-primary)] shadow-sm">
-          <span className="text-sm font-bold">A</span>
+          <span className="text-sm font-bold">F</span>
         </div>
         <span className="hidden text-sm font-semibold tracking-tight text-[var(--text-primary)] sm:block">
-          Agent
+          Folio
         </span>
       </div>
 

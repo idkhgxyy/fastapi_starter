@@ -46,7 +46,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">
-            FastAPI AI Agent
+            Folio
           </h1>
           <p className="text-sm text-[var(--text-tertiary)] mt-1">
             创建账号开始使用
@@ -133,7 +133,7 @@ export default function RegisterPage() {
         </div>
 
         <p className="text-center mt-6 text-xs text-[var(--text-tertiary)]">
-          FastAPI AI Agent v0.1.0
+          Folio · v0.1.0
         </p>
       </div>
     </div>

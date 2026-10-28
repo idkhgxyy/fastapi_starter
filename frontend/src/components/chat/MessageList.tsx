@@ -61,7 +61,7 @@ function MessageBubble({ message }: { message: Message }) {
   return (
     <div className="flex items-start gap-3">
       <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--text-primary)] text-[var(--bg-primary)] shadow-sm">
-        <span className="text-xs font-bold">A</span>
+        <span className="text-xs font-bold">F</span>
       </div>
       <div className="min-w-0 flex-1 space-y-3">
         {message.reasoning && <ReasoningBlock content={message.reasoning} />}

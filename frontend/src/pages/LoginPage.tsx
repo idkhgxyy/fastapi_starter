@@ -62,9 +62,9 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-7 flex items-center justify-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--text-primary)] text-[var(--bg-primary)]">
-            <span className="text-sm font-bold">A</span>
+            <span className="text-sm font-bold">F</span>
           </div>
-          <span className="text-lg font-semibold tracking-tight text-[var(--text-primary)]">Agent</span>
+          <span className="text-lg font-semibold tracking-tight text-[var(--text-primary)]">Folio</span>
         </div>
 
         <div className="card-surface rounded-2xl p-6 sm:p-7">
@@ -155,7 +155,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <p className="mt-5 text-center text-xs text-[var(--text-tertiary)]">FastAPI AI Agent · v0.1.0</p>
+        <p className="mt-5 text-center text-xs text-[var(--text-tertiary)]">Folio · v0.1.0</p>
       </div>
     </div>
   )

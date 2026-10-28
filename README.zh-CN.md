@@ -1,8 +1,8 @@
-# FastAPI Starter — 全栈 AI Agent 系统
+# Folio — 自托管知识工作台
 
 [English version / 英文版](README.md)
 
-基于 **FastAPI + React + PostgreSQL(pgvector) + Redis + Celery + Ollama** 构建的生产级全栈 AI Agent 系统。支持 JWT 鉴权、租户隔离的 RAG 知识库、OpenAI Tool Calling、异步文档处理与全方位可观测性。
+Folio 是基于 **FastAPI + React + PostgreSQL(pgvector) + Redis + Celery** 构建的自托管知识工作台，支持 JWT 鉴权、按用户隔离的 RAG 知识库与来源引用、Tool Calling、异步文档处理和可观测性。仓库名仍为 `fastapi_starter`。
 
 ## 项目亮点
 

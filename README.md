@@ -1,8 +1,8 @@
-# FastAPI Starter — Full-Stack AI Agent System
+# Folio — Personal Knowledge Workspace
 
 [中文版 / Chinese](README.zh-CN.md)
 
-A production-grade full-stack AI Agent system built with **FastAPI + React + PostgreSQL(pgvector) + Redis + Celery + Ollama**. Features JWT authentication, tenant-isolated RAG knowledge base, Tool Calling via OpenAI function calling, async document processing, and comprehensive observability.
+Folio is a self-hosted knowledge workspace built with **FastAPI + React + PostgreSQL(pgvector) + Redis + Celery**. It provides JWT authentication, per-user RAG knowledge bases with source citations, tool calling, async document processing, and observability. The repository name remains `fastapi_starter`.
 
 ## Highlights
 
