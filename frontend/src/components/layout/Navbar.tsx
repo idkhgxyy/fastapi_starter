@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
-import { IconSun, IconMoon, IconSearch, IconUser, IconLogout, IconSettings, IconMenu } from '@/components/ui/Icons'
+import { IconSun, IconMoon, IconFile, IconUser, IconLogout, IconSettings, IconMenu } from '@/components/ui/Icons'
 
 export default function Navbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const { user, logout } = useAuth()
@@ -27,33 +27,35 @@ export default function Navbar({ onToggleSidebar }: { onToggleSidebar: () => voi
   }
 
   return (
-    <nav className="h-14 border-b border-[var(--border-primary)] bg-[var(--bg-secondary)] flex items-center px-4 gap-3 shrink-0">
+    <nav className="h-16 shrink-0 border-b border-[var(--border-primary)]/80 bg-[var(--bg-secondary)]/80 backdrop-blur-xl flex items-center px-4 gap-3">
       <button
         onClick={onToggleSidebar}
-        className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
+        className="p-2.5 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
+        aria-label="打开侧栏"
       >
         <IconMenu />
       </button>
 
-      <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg bg-brand-500 flex items-center justify-center">
-          <span className="text-white text-xs font-bold">A</span>
+      <div className="flex items-center gap-2.5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--text-primary)] text-[var(--bg-primary)] shadow-sm">
+          <span className="text-sm font-bold">A</span>
         </div>
-        <span className="text-sm font-semibold text-[var(--text-primary)] hidden sm:block">
-          Agent
-        </span>
+        <div className="hidden sm:block">
+          <p className="text-sm font-semibold leading-none tracking-tight text-[var(--text-primary)]">Agent</p>
+          <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Workspace</p>
+        </div>
       </div>
 
-      <div className="flex-1 max-w-md mx-auto hidden md:block">
-        <div className="relative">
-          <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
-          <input
-            type="text"
-            placeholder="搜索知识库..."
-            className="w-full h-9 pl-9 pr-3 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
-          />
-        </div>
-      </div>
+      <div className="flex-1" />
+
+      <button
+        type="button"
+        onClick={() => navigate('/knowledge')}
+        className="hidden sm:inline-flex h-9 items-center gap-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-primary)]/60 px-3 text-xs font-medium text-[var(--text-secondary)] transition hover:border-brand-500/30 hover:text-brand-600"
+      >
+        <IconFile />
+        知识库
+      </button>
 
       <div className="flex items-center gap-1">
         <button

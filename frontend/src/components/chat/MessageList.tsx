@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Message } from '@/types'
 import ToolCallCard from './ToolCallCard'
-import { IconUser } from '@/components/ui/Icons'
+import { IconActivity, IconChat, IconSun, IconUser, IconWrench } from '@/components/ui/Icons'
 
 interface MessageListProps {
   messages: Message[]
@@ -24,13 +24,13 @@ export default function MessageList({ messages, isStreaming, onQuickAsk }: Messa
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-3xl mx-auto py-6 px-4 space-y-6">
+      <div className="mx-auto max-w-3xl space-y-7 px-4 py-8">
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
         {isStreaming && (
-          <div className="flex items-center gap-2 text-sm text-[var(--text-tertiary)]">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
+          <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-3 py-1.5 text-xs text-[var(--text-tertiary)]">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-500" />
             正在思考...
           </div>
         )}
@@ -44,11 +44,11 @@ function MessageBubble({ message }: { message: Message }) {
   if (message.role === 'user') {
     return (
       <div className="flex items-start justify-end gap-3">
-        <div className="max-w-[70%] bg-brand-500 text-white rounded-2xl rounded-br-md px-4 py-2.5">
-          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+        <div className="max-w-[78%] rounded-2xl rounded-br-md bg-brand-500 px-4 py-2.5 text-white shadow-sm">
+          <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
         </div>
-        <div className="w-8 h-8 rounded-full bg-brand-500/20 flex items-center justify-center shrink-0 mt-1">
-          <IconUser className="text-brand-500" />
+        <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-brand-500/20 bg-brand-500/10">
+          <IconUser className="text-brand-600" />
         </div>
       </div>
     )
@@ -60,18 +60,16 @@ function MessageBubble({ message }: { message: Message }) {
 
   return (
     <div className="flex items-start gap-3">
-      <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center shrink-0 mt-1">
-        <span className="text-white text-xs font-bold">A</span>
+      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--text-primary)] text-[var(--bg-primary)] shadow-sm">
+        <span className="text-xs font-bold">A</span>
       </div>
-      <div className="flex-1 min-w-0 space-y-3">
-        {message.reasoning && (
-          <ReasoningBlock content={message.reasoning} />
-        )}
+      <div className="min-w-0 flex-1 space-y-3">
+        {message.reasoning && <ReasoningBlock content={message.reasoning} />}
         {message.content && (
-          <div className="prose prose-sm max-w-none text-[var(--text-primary)]">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {message.content}
-            </ReactMarkdown>
+          <div className="rounded-2xl rounded-tl-md border border-[var(--border-primary)]/80 bg-[var(--bg-secondary)]/75 px-4 py-3.5 shadow-[var(--shadow-card)]">
+            <div className="prose prose-sm max-w-none text-[var(--text-primary)]">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+            </div>
           </div>
         )}
         {message.tool_calls?.map((tc, i) => (
@@ -102,39 +100,72 @@ function ReasoningBlock({ content }: { content: string }) {
 
 function EmptyState({ onQuickAsk }: { onQuickAsk?: (question: string) => void }) {
   const quickQuestions = [
-    { label: '这个系统有哪些功能？', icon: '💡' },
-    { label: '帮我算一下 123 × 456', icon: '🧮' },
-    { label: '创建一个任务：学习 FastAPI', icon: '📋' },
-    { label: '今天北京天气怎么样？', icon: '🌤' },
+    {
+      label: '这个系统有哪些功能？',
+      hint: '了解能力边界',
+      icon: IconChat,
+    },
+    {
+      label: '帮我算一下 123 × 456',
+      hint: '测试多步推理',
+      icon: IconActivity,
+    },
+    {
+      label: '创建一个任务：学习 FastAPI',
+      hint: '体验任务创建',
+      icon: IconWrench,
+    },
+    {
+      label: '今天北京天气怎么样？',
+      hint: '体验工具调用',
+      icon: IconSun,
+    },
   ]
 
   return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="text-center max-w-md">
-        <div className="w-16 h-16 rounded-2xl bg-brand-500/10 flex items-center justify-center mx-auto mb-4">
-          <svg className="w-8 h-8 text-brand-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
+    <div className="flex-1 overflow-y-auto">
+      <div className="mx-auto flex min-h-full max-w-3xl flex-col justify-center px-5 py-16">
+        <div className="max-w-xl">
+          <p className="eyebrow">New thread</p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">
+            今天想弄清楚什么？
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">
+            直接提问，或从下面选一个开始。知识库问答会自动带上命中的原文片段。
+          </p>
         </div>
-        <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
-          开始对话
-        </h2>
-        <p className="text-sm text-[var(--text-tertiary)] mb-6">
-          试试以下问题，快速体验核心功能
-        </p>
-        <div className="grid grid-cols-1 gap-2">
-          {quickQuestions.map((q) => (
-            <button
-              key={q.label}
-              onClick={() => onQuickAsk?.(q.label)}
-              className="flex items-center gap-3 w-full px-4 py-2.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-brand-500/30 text-left transition-all duration-200 group"
-            >
-              <span className="text-base shrink-0">{q.icon}</span>
-              <span className="text-sm text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">
-                {q.label}
-              </span>
-            </button>
-          ))}
+
+        <div className="mt-8 grid gap-3 sm:grid-cols-2">
+          {quickQuestions.map((q) => {
+            const Icon = q.icon
+            return (
+              <button
+                key={q.label}
+                onClick={() => onQuickAsk?.(q.label)}
+                className="group flex items-start gap-3 rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-secondary)]/75 p-4 text-left transition hover:-translate-y-0.5 hover:border-brand-500/30 hover:shadow-[var(--shadow-card)]"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600">
+                  <Icon />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium text-[var(--text-primary)]">
+                    {q.label}
+                  </span>
+                  <span className="mt-1 block text-xs text-[var(--text-tertiary)]">
+                    {q.hint}
+                  </span>
+                </span>
+                <span className="mt-1 text-sm text-[var(--text-tertiary)] transition-transform group-hover:translate-x-0.5">
+                  →
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="mt-8 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--border-primary)] bg-[var(--bg-secondary)]/60 px-3 py-1.5 text-xs text-[var(--text-tertiary)]">
+          <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+          知识库已就绪 · 答案可回溯来源
         </div>
       </div>
     </div>
