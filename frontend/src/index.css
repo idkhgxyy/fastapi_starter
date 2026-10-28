@@ -34,36 +34,30 @@
 }
 
 :root {
-  --bg-primary: #f6f3ec;
-  --bg-secondary: #fffdf8;
-  --bg-tertiary: #ece7db;
-  --text-primary: #18201d;
-  --text-secondary: #53605a;
-  --text-tertiary: #8b948e;
-  --border-primary: #d9d4c7;
-  --border-secondary: #e8e2d6;
-  --shadow-card: 0 1px 2px rgba(24, 32, 29, 0.04), 0 18px 40px -28px rgba(24, 32, 29, 0.35);
-  --shadow-float: 0 24px 60px -30px rgba(24, 32, 29, 0.45);
-  --page-glow:
-    radial-gradient(900px 520px at 8% -8%, rgba(23, 155, 125, 0.12), transparent 65%),
-    radial-gradient(820px 460px at 96% 2%, rgba(196, 123, 44, 0.09), transparent 60%);
+  --bg-primary: #f5f5f4;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #eeeef0;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-tertiary: #8b8b93;
+  --border-primary: #e1e1e4;
+  --border-secondary: #ececef;
+  --shadow-card: none;
+  --shadow-float: none;
   color-scheme: light;
 }
 
 .dark {
-  --bg-primary: #0c1210;
-  --bg-secondary: #121a17;
-  --bg-tertiary: #1a2420;
-  --text-primary: #eef3ef;
-  --text-secondary: #a9b5ae;
-  --text-tertiary: #74827a;
-  --border-primary: #2a3731;
-  --border-secondary: #202b26;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 18px 40px -28px rgba(0, 0, 0, 0.8);
-  --shadow-float: 0 24px 60px -30px rgba(0, 0, 0, 0.9);
-  --page-glow:
-    radial-gradient(900px 520px at 8% -8%, rgba(45, 163, 148, 0.16), transparent 65%),
-    radial-gradient(820px 460px at 96% 2%, rgba(196, 123, 44, 0.08), transparent 60%);
+  --bg-primary: #0b0b0c;
+  --bg-secondary: #141416;
+  --bg-tertiary: #1d1d20;
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #71717a;
+  --border-primary: #2a2a2e;
+  --border-secondary: #202024;
+  --shadow-card: none;
+  --shadow-float: none;
   color-scheme: dark;
 }
 
@@ -71,8 +65,6 @@ body {
   margin: 0;
   font-family: var(--font-sans);
   background-color: var(--bg-primary);
-  background-image: var(--page-glow);
-  background-attachment: fixed;
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

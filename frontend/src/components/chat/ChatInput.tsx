@@ -42,7 +42,7 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
       className="border-t border-[var(--border-primary)]/70 bg-[var(--bg-secondary)]/60 px-4 py-4 backdrop-blur-xl"
     >
       <div className="mx-auto max-w-3xl">
-        <div className="flex items-end gap-2 rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-primary)] p-2 shadow-[var(--shadow-card)] transition focus-within:border-brand-500/50 focus-within:ring-4 focus-within:ring-brand-500/10">
+        <div className="flex items-end gap-2 rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-primary)] p-2 transition focus-within:border-brand-500/50 focus-within:ring-4 focus-within:ring-brand-500/10">
           <textarea
             ref={textareaRef}
             value={input}
@@ -60,7 +60,7 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
             type="submit"
             disabled={!input.trim() || disabled}
             aria-label={disabled ? '停止生成' : '发送消息'}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-white shadow-sm transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {disabled ? <IconStop /> : <IconSend />}
           </button>

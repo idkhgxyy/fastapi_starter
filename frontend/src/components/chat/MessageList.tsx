@@ -44,7 +44,7 @@ function MessageBubble({ message }: { message: Message }) {
   if (message.role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[78%] rounded-2xl rounded-br-md bg-brand-500 px-4 py-2.5 text-white shadow-sm">
+        <div className="max-w-[78%] rounded-2xl rounded-br-md bg-brand-500 px-4 py-2.5 text-white">
           <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
         </div>
       </div>
@@ -59,7 +59,7 @@ function MessageBubble({ message }: { message: Message }) {
     <div className="max-w-[90%] space-y-3">
       {message.reasoning && <ReasoningBlock content={message.reasoning} />}
       {message.content && (
-        <div className="rounded-2xl rounded-tl-md border border-[var(--border-primary)]/80 bg-[var(--bg-secondary)]/75 px-4 py-3.5 shadow-[var(--shadow-card)]">
+        <div className="rounded-2xl rounded-tl-md border border-[var(--border-primary)]/80 bg-[var(--bg-secondary)]/75 px-4 py-3.5">
           <div className="prose prose-sm max-w-none text-[var(--text-primary)]">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
           </div>
@@ -117,7 +117,7 @@ function EmptyState({ onQuickAsk }: { onQuickAsk?: (question: string) => void })
               <button
                 key={q.label}
                 onClick={() => onQuickAsk?.(q.label)}
-                className="group flex items-center gap-3 rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-secondary)]/75 p-4 text-left transition hover:border-brand-500/30 hover:shadow-[var(--shadow-card)]"
+                className="group flex items-center gap-3 rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-secondary)]/75 p-4 text-left transition hover:border-brand-500/30"
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600">
                   <Icon />
