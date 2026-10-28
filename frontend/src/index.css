@@ -4,7 +4,6 @@
 @theme {
   --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
-  --font-display: "Instrument Serif", "Iowan Old Style", "Songti SC", serif;
 
   --color-brand-50: #edfaf6;
   --color-brand-100: #d5f5ec;
@@ -86,14 +85,6 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-brand-400);
   outline-offset: 2px;
-}
-
-.eyebrow {
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
 }
 
 .card-surface {

@@ -40,10 +40,9 @@ export default function Navbar({ onToggleSidebar }: { onToggleSidebar: () => voi
         <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--text-primary)] text-[var(--bg-primary)] shadow-sm">
           <span className="text-sm font-bold">A</span>
         </div>
-        <div className="hidden sm:block">
-          <p className="text-sm font-semibold leading-none tracking-tight text-[var(--text-primary)]">Agent</p>
-          <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Workspace</p>
-        </div>
+        <span className="hidden text-sm font-semibold tracking-tight text-[var(--text-primary)] sm:block">
+          Agent
+        </span>
       </div>
 
       <div className="flex-1" />

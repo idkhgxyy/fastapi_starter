@@ -89,7 +89,7 @@ export default function KnowledgePage() {
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
       <header className="sticky top-0 z-20 border-b border-[var(--border-primary)]/80 bg-[var(--bg-secondary)]/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:px-6">
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6">
           <button
             onClick={() => navigate('/chat')}
             className="text-sm text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-primary)]"
@@ -97,32 +97,18 @@ export default function KnowledgePage() {
             ← 返回
           </button>
           <span className="h-5 w-px bg-[var(--border-primary)]" />
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--text-primary)] text-[var(--bg-primary)]">
-              <span className="text-sm font-bold">A</span>
-            </div>
-            <div className="hidden sm:block">
-              <p className="text-sm font-semibold leading-none tracking-tight">Knowledge</p>
-              <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Workspace</p>
-            </div>
-          </div>
-          <div className="flex-1" />
-          <span className="hidden items-center gap-1.5 rounded-full border border-[var(--border-primary)] bg-[var(--bg-primary)]/60 px-3 py-1.5 text-xs text-[var(--text-tertiary)] sm:inline-flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
-            私有 · 来源可追溯
-          </span>
+          <h1 className="text-sm font-semibold text-[var(--text-primary)]">知识库</h1>
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:py-10">
         <section className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="eyebrow">Knowledge base</p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">
-              你的知识库
-            </h1>
+            <h2 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-3xl">
+              文档与问答
+            </h2>
             <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--text-secondary)]">
-              上传资料，建立可检索、可引用、可追问的私人知识空间。
+              上传资料后，可以检索原文，也可以直接向知识库提问。
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -147,10 +133,9 @@ export default function KnowledgePage() {
 
         <div className="mt-8 grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
           <section className="card-surface rounded-3xl p-5 sm:p-6">
-            <p className="eyebrow">Ask your library</p>
-            <h2 className="mt-2 text-xl font-semibold tracking-tight text-[var(--text-primary)]">问知识库</h2>
+            <h2 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">问知识库</h2>
             <p className="mt-1 text-sm text-[var(--text-tertiary)]">
-              基于已就绪文档回答，并返回命中的来源片段。
+              基于已就绪文档回答，并返回来源片段。
             </p>
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
               <input
@@ -203,8 +188,7 @@ export default function KnowledgePage() {
 
           <div className="space-y-5">
             <section className="card-surface rounded-3xl p-5">
-              <p className="eyebrow">Add source</p>
-              <h2 className="mt-2 text-xl font-semibold tracking-tight text-[var(--text-primary)]">上传文档</h2>
+              <h2 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">上传文档</h2>
               <input
                 ref={fileRef}
                 type="file"
@@ -227,12 +211,8 @@ export default function KnowledgePage() {
                   支持 .txt .md .pdf
                 </span>
               </button>
-            </section>
-
-            <section className="rounded-3xl border border-brand-500/15 bg-brand-500/[0.04] p-5">
-              <p className="eyebrow text-brand-600">Tips</p>
-              <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                上传后等待状态变为“就绪”，再提问。答案下方可以展开来源片段，核对原文。
+              <p className="mt-3 text-xs leading-5 text-[var(--text-tertiary)]">
+                上传后等待状态变为“就绪”，再提问。
               </p>
             </section>
           </div>
@@ -241,8 +221,7 @@ export default function KnowledgePage() {
         <section className="mt-8">
           <div className="mb-4 flex items-end justify-between gap-4">
             <div>
-              <p className="eyebrow">Library</p>
-              <h2 className="mt-1 text-lg font-semibold tracking-tight text-[var(--text-primary)]">
+              <h2 className="text-lg font-semibold tracking-tight text-[var(--text-primary)]">
                 文档列表 <span className="font-mono text-sm font-normal text-[var(--text-tertiary)]">({docs.length})</span>
               </h2>
             </div>
