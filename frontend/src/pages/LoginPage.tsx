@@ -60,10 +60,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)] px-4 py-10">
       <div className="w-full max-w-sm">
-        <div className="mb-7 flex items-center justify-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--text-primary)] text-[var(--bg-primary)]">
-            <span className="text-sm font-bold">F</span>
-          </div>
+        <div className="mb-7 text-center">
           <span className="text-lg font-semibold tracking-tight text-[var(--text-primary)]">Folio</span>
         </div>
 
