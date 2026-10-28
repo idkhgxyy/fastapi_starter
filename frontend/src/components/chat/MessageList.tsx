@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Message } from '@/types'
 import ToolCallCard from './ToolCallCard'
-import { IconActivity, IconChat, IconSun, IconUser, IconWrench } from '@/components/ui/Icons'
+import { IconActivity, IconChat, IconSun, IconWrench } from '@/components/ui/Icons'
 
 interface MessageListProps {
   messages: Message[]
@@ -43,12 +43,9 @@ export default function MessageList({ messages, isStreaming, onQuickAsk }: Messa
 function MessageBubble({ message }: { message: Message }) {
   if (message.role === 'user') {
     return (
-      <div className="flex items-start justify-end gap-3">
+      <div className="flex justify-end">
         <div className="max-w-[78%] rounded-2xl rounded-br-md bg-brand-500 px-4 py-2.5 text-white shadow-sm">
           <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
-        </div>
-        <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-brand-500/20 bg-brand-500/10">
-          <IconUser className="text-brand-600" />
         </div>
       </div>
     )
@@ -59,23 +56,18 @@ function MessageBubble({ message }: { message: Message }) {
   }
 
   return (
-    <div className="flex items-start gap-3">
-      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--text-primary)] text-[var(--bg-primary)] shadow-sm">
-        <span className="text-xs font-bold">F</span>
-      </div>
-      <div className="min-w-0 flex-1 space-y-3">
-        {message.reasoning && <ReasoningBlock content={message.reasoning} />}
-        {message.content && (
-          <div className="rounded-2xl rounded-tl-md border border-[var(--border-primary)]/80 bg-[var(--bg-secondary)]/75 px-4 py-3.5 shadow-[var(--shadow-card)]">
-            <div className="prose prose-sm max-w-none text-[var(--text-primary)]">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
-            </div>
+    <div className="max-w-[90%] space-y-3">
+      {message.reasoning && <ReasoningBlock content={message.reasoning} />}
+      {message.content && (
+        <div className="rounded-2xl rounded-tl-md border border-[var(--border-primary)]/80 bg-[var(--bg-secondary)]/75 px-4 py-3.5 shadow-[var(--shadow-card)]">
+          <div className="prose prose-sm max-w-none text-[var(--text-primary)]">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
           </div>
-        )}
-        {message.tool_calls?.map((tc, i) => (
-          <ToolCallCard key={i} toolCall={tc} />
-        ))}
-      </div>
+        </div>
+      )}
+      {message.tool_calls?.map((tc, i) => (
+        <ToolCallCard key={i} toolCall={tc} />
+      ))}
     </div>
   )
 }
