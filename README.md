@@ -9,12 +9,12 @@ Folio is a self-hosted knowledge workspace built with **FastAPI + React + Postgr
 - `FastAPI + SQLAlchemy + PostgreSQL(pgvector)` backend
 - `JWT` auth with registration, login, permission checks, and password change
 - `Celery + Redis` async task processing with `Flower` monitoring dashboard
-- `Ollama` local deployment of `qwen2.5:3b` and `bge-m3`
+- Optional `Ollama` local deployment of `qwen2.5:3b` and `bge-m3` (disabled on the 2 GB deployment)
 - `RAG` supporting `.txt` / `.md` / `.pdf` uploads, tenant-isolated, async chunking & vectorization
 - `BGE-Reranker` optional re-ranking for improved recall quality (requires `sentence-transformers`)
 - `Tool Calling` with 5 tools: weather, task creation, system status, task list, math calculator
 - `Multi-Tenant BYOK` — each user configures their own LLM provider and API key (Fernet-encrypted)
-- `Prometheus + Grafana` monitoring for request volume, latency, and error rate
+- Optional `Prometheus + Grafana` monitoring for request volume, latency, and error rate (`monitor` profile, off by default)
 - `LLM Observability` logging prompt, response, tokens, latency, tool calls, cost estimates, errors
 - `Redis sliding-window rate limiting` on chat endpoints, graceful degradation on Redis failure
 - `SSE streaming` for Chat and RAG; the chat frontend streams first, and tool-calling turns are transparently handed to the non-streaming tool chain
@@ -23,14 +23,14 @@ Folio is a self-hosted knowledge workspace built with **FastAPI + React + Postgr
 - **Goal-driven agent tasks** — describe a goal, let a background pipeline turn your knowledge base into a Markdown deliverable you can download
 - **BYOK cost governance** — pricing center, per-user monthly budget (auto-reset), cloud→local fallback chain, semantic cache (similar questions skip the LLM and report the amount saved), off-peak batch scheduling
 - `GitHub Actions CI` PostgreSQL integration tests + Docker build verification
-- `249 unit tests` + pre-commit hooks (ruff lint/format)
+- `261 tests` + pre-commit hooks (ruff lint/format)
 - **Auto Mock mode** — no API Key? No problem. System auto-enables Mock mode when `LLM_API_KEY` is empty
 - **`make setup` one-click start** — auto-generates SECRET_KEY, seeds demo data, pulls Ollama models
 - **Docker Compose Profiles** — core 4 containers by default, `--profile full` adds Ollama, `--profile monitor` adds Grafana/Prometheus/Flower
 - **Modern React SPA frontend** — 9 route pages covering chat, knowledge base, tasks, observability, settings, health
 - **SSE streaming rendering** — typewriter-effect real-time chat display
 - **Mock mode** — full offline development without a running backend
-- **Refined minimal design** — dual theme, JetBrains Mono + Plus Jakarta Sans, three-column layout
+- **Neutral, responsive UI** — light/dark theme, a single accent color, and a focus on readable content over decoration
 
 ## Tech Stack
 
@@ -287,26 +287,15 @@ The pre-built image includes both backend and frontend — just open `http://loc
 | Frontend SPA (dev) | `http://localhost:5173` | `cd frontend && npm run dev` |
 | Frontend SPA (mock) | `http://localhost:5173` | `cd frontend && npx vite --host --mode mock` |
 | Legacy Demo Page | `http://localhost:8000/demo.html` | Lightweight HTML demo |
-| Prometheus | `http://localhost:9090` | Metrics explorer |
-| Grafana | `http://localhost:3000` | admin / admin (change in production) |
-| Flower | `http://localhost:5555` | Celery monitoring |
+| Prometheus | `http://localhost:9090` | Optional `monitor` profile |
+| Grafana | `http://localhost:3000` | Optional `monitor` profile; admin / admin (change if exposed) |
+| Flower | `http://localhost:5555` | Optional `monitor` profile; Celery monitoring |
 
 ## Screenshots
 
-### Chat & Sidebar
-| Chat | Knowledge Base | Tasks |
+| Login | Chat | Knowledge |
 |:---:|:---:|:---:|
-| ![Chat with Sidebar](docs/images/chat-with-sidebar.png) | ![Knowledge Page](docs/images/knowledge-page.png) | ![Tasks Page](docs/images/tasks-page.png) |
-
-### Observability & Settings
-| LLM Monitoring | Health | Settings |
-|:---:|:---:|:---:|
-| ![Observability](docs/images/observability-page.png) | ![Health](docs/images/health-page.png) | ![Settings](docs/images/settings-page.png) |
-
-### API Docs & Grafana
-| Swagger | Grafana |
-|:---:|:---:|
-| ![Swagger Overview](docs/images/swagger-overview.png) | ![Grafana Dashboard](docs/images/grafana-dashboard.png) |
+| ![Folio login](docs/images/folio-login.png) | ![Folio chat](docs/images/folio-chat.png) | ![Folio knowledge](docs/images/folio-knowledge.png) |
 
 ## API Examples
 
@@ -409,7 +398,7 @@ Each LLM invocation records:
 ## Testing
 
 ```bash
-# Run all 249 unit tests
+# Run all 261 tests
 python3 -m pytest -q
 
 # With coverage report
@@ -427,14 +416,14 @@ locust -f scripts/locustfile.py --host=http://localhost:8000
 
 ## About This Project
 
-This project demonstrates end-to-end implementation of an AI Agent system — from authentication and data modeling to RAG retrieval pipelines, tool-calling agents, async task queues, and production observability.
+This project demonstrates end-to-end implementation of a self-hosted knowledge workspace — from authentication and data modeling to RAG retrieval pipelines, source citations, tool calling, async task queues, and observability.
 
 Key capabilities:
 - **Backend**: FastAPI layered architecture (Router → Service → Model), SQLAlchemy 2.0, Alembic migrations
 - **AI Integration**: Ollama / OpenAI-compatible APIs, 5 tools via OpenAI function calling, agentic multi-round conversation
 - **RAG Pipeline**: Multi-format document ingestion, pgvector cosine search, optional BGE-Reranker
 - **Frontend**: React SPA with SSE streaming chat, Recharts observability dashboards, Mock mode
-- **DevOps**: Docker Compose (8 services), GitHub Actions CI, Prometheus + Grafana, LLM call logging
+- **DevOps**: Docker Compose (4 core services + optional profiles), GitHub Actions CI with frontend build, LLM call logging
 - **Security**: JWT + bcrypt auth, Fernet-encrypted API keys, Redis sliding-window rate limiting, tenant data isolation
 
 Detailed architecture, module documentation, and migration history: [docs/](docs/)

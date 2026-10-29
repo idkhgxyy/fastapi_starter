@@ -9,12 +9,12 @@ Folio 是基于 **FastAPI + React + PostgreSQL(pgvector) + Redis + Celery** 构�
 - `FastAPI + SQLAlchemy + PostgreSQL(pgvector)` 构建标准后端服务
 - `JWT` 用户体系，支持注册、登录、权限校验与密码修改
 - `Celery + Redis` 支持异步任务处理，`Flower` 可视化监控面板
-- `Ollama` 本地部署 `qwen2.5:3b` 与 `bge-m3`
+- 可选 `Ollama` 本地部署 `qwen2.5:3b` 与 `bge-m3`（2G 部署默认关闭）
 - `RAG` 支持 `.txt` / `.md` / `.pdf` 多格式文档上传，按用户隔离，异步切分与向量化
 - `BGE-Reranker` 可选启用二次重排，提升知识库召回结果排序质量（需额外安装 `sentence-transformers`）
 - `Tool Calling` 支持 5 个工具（天气查询、创建任务、系统状态、任务列表、数学计算器）
 - `Multi-Tenant BYOK` 每个用户可独立配置自有大模型厂商与 API Key（Fernet 加密）
-- `Prometheus + Grafana` 监控请求量、延迟与错误率，预置看板
+- 可选 `Prometheus + Grafana` 监控请求量、延迟与错误率（`monitor` profile，默认不启动）
 - `LLM Observability` 记录 prompt、response、token、耗时、工具调用链、成本估算、错误原因
 - `Redis 滑动窗口限流` 保护聊天接口，Redis 不可用时自动降级
 - `SSE 流式输出` Chat 与 RAG 均支持；聊天前端流式优先，需要工具的回合由后端透明转交非流式工具链
@@ -23,14 +23,14 @@ Folio 是基于 **FastAPI + React + PostgreSQL(pgvector) + Redis + Celery** 构�
 - **目标型 Agent 任务** — 描述一个目标，后台流水线把知识库资料变成一份可下载的 Markdown 成果
 - **BYOK 成本治理** — 定价中心、按用户月度预算（到期自动重置）、云端→本地降级链、语义缓存（相似问题免调用并量化节省金额）、闲时批量任务调度（百炼闲时窗口跑批）
 - `GitHub Actions CI` PostgreSQL 集成测试 + Docker 构建验证
-- `249 个单元测试` + pre-commit hooks（ruff lint/format）
+- `261 个测试` + pre-commit hooks（ruff lint/format）
 - **Mock 模式自动启用** — 无需 API Key，`LLM_API_KEY` 为空时自动切换 Mock 模式
 - **`make setup` 一键启动** — 自动生成 SECRET_KEY、灌入 demo 数据、拉取 Ollama 模型
 - **Docker Compose Profile 分层** — 核心 4 容器默认启动，`--profile full` 加 Ollama，`--profile monitor` 加监控（Grafana/Prometheus/Flower）
 - **现代化 React SPA 前端** — 9 个独立路由页面，覆盖聊天、知识库、任务、可观测性、设置、健康监控
 - **SSE 流式渲染** — 支持打字机效果的流式对话展示
 - **全 Mock 模式** — 无需后端即可独立开发调试
-- **精致克制的前端设计** — 双主题、JetBrains Mono + Plus Jakarta Sans 字体体系、三栏布局
+- **中性响应式界面** — 明暗双主题、单一强调色，优先保证内容可读性而不是装饰
 
 ## 技术栈
 
@@ -290,26 +290,15 @@ docker compose up -d
 | 前端 SPA（开发模式）| `http://localhost:5173` | `cd frontend && npm run dev` |
 | 前端 SPA（Mock 模式）| `http://localhost:5173` | `cd frontend && npx vite --host --mode mock` |
 | 旧版 Demo 页面 | `http://localhost:8000/demo.html` | 轻量 HTML Demo |
-| Prometheus | `http://localhost:9090` | 指标查询 |
-| Grafana | `http://localhost:3000` | admin / admin（生产环境请修改） |
-| Flower | `http://localhost:5555` | Celery 任务监控 |
+| Prometheus | `http://localhost:9090` | 可选 `monitor` profile |
+| Grafana | `http://localhost:3000` | 可选 `monitor` profile；admin / admin（对外时请修改） |
+| Flower | `http://localhost:5555` | 可选 `monitor` profile；Celery 任务监控 |
 
 ## 界面展示
 
-### AI 对话与侧边栏
-| 对话界面 | 知识库管理 | 任务管理 |
+| 登录 | 聊天 | 知识库 |
 |:---:|:---:|:---:|
-| ![Chat with Sidebar](docs/images/chat-with-sidebar.png) | ![Knowledge Page](docs/images/knowledge-page.png) | ![Tasks Page](docs/images/tasks-page.png) |
-
-### 可观测性面板与系统监控
-| LLM 调用监控 | 系统健康 | 用户设置 |
-|:---:|:---:|:---:|
-| ![Observability](docs/images/observability-page.png) | ![Health](docs/images/health-page.png) | ![Settings](docs/images/settings-page.png) |
-
-### Swagger 接口文档与 Grafana 监控大盘
-| Swagger API 文档 | Grafana Dashboard |
-|:---:|:---:|
-| ![Swagger Overview](docs/images/swagger-overview.png) | ![Grafana Dashboard](docs/images/grafana-dashboard.png) |
+| ![Folio 登录](docs/images/folio-login.png) | ![Folio 聊天](docs/images/folio-chat.png) | ![Folio 知识库](docs/images/folio-knowledge.png) |
 
 ## 关键接口示例
 
@@ -412,7 +401,7 @@ curl "http://localhost:8000/api/v1/observability/llm-stats?days=7" \
 ## 测试与验证
 
 ```bash
-# 运行全部 249 个单元测试
+# 运行全部 261 个测试
 python3 -m pytest -q
 
 # 带覆盖率报告
@@ -430,14 +419,14 @@ locust -f scripts/locustfile.py --host=http://localhost:8000
 
 ## 关于本项目
 
-本项目实现了 AI Agent 系统的端到端工程化落地——从鉴权与数据建模，到 RAG 检索管线、Tool Calling Agent、异步任务队列，再到生产级可观测性。
+本项目实现了自托管知识工作台的端到端工程化落地——从鉴权与数据建模，到 RAG 检索管线、来源引用、Tool Calling、异步任务队列，再到可观测性。
 
 核心能力：
 - **后端**：FastAPI 分层架构（Router → Service → Model），SQLAlchemy 2.0，Alembic 迁移
 - **AI 集成**：Ollama / OpenAI 兼容 API，5 个工具（OpenAI function calling），Agent 式多轮对话
 - **RAG 管线**：多格式文档接入，pgvector 余弦检索，可选 BGE-Reranker 重排
 - **前端**：React SPA，SSE 流式聊天，Recharts 可观测面板，Mock 离线模式
-- **DevOps**：Docker Compose（8 个服务），GitHub Actions CI，Prometheus + Grafana，LLM 调用日志
+- **DevOps**：Docker Compose（4 个核心服务 + 可选 profile），GitHub Actions CI（含前端构建），LLM 调用日志
 - **安全**：JWT + bcrypt 鉴权，Fernet 加密 API Key，Redis 滑动窗口限流，租户数据隔离
 
 详细架构、模块文档与变更历史：[docs/](docs/)
