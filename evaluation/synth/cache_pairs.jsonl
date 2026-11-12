@@ -1,0 +1,8 @@
+{"id": "cache-106366-language", "base": "J106366 这个岗位要求掌握哪些编程语言？", "paraphrase": "106366 这个岗位需要会哪些语言？", "negative": "J101366 这个岗位要求掌握哪些编程语言？"}
+{"id": "cache-2201-budget", "base": "P-2201 星河项目的预算是多少？", "paraphrase": "星河项目投入了多少钱？", "negative": "P-2202 远山项目的预算是多少？"}
+{"id": "cache-annual-leave", "base": "员工入职满一年后有几天带薪年假？", "paraphrase": "满一年工龄能休多少天年假？", "negative": "员工每年有多少天带薪病假？"}
+{"id": "cache-final-weight", "base": "信息检索课程的期末考试成绩占总评多少？", "paraphrase": "这门课期末考占总成绩的比例是多少？", "negative": "信息检索课程的实验成绩占总评多少？"}
+{"id": "cache-108810-framework", "base": "J108810 岗位主要使用什么深度学习框架？", "paraphrase": "108810 这个算法岗要求掌握哪个框架？", "negative": "J104521 这个岗位要求熟悉哪些前端技术？"}
+{"id": "cache-2202-stack", "base": "远山项目用了哪套技术？", "paraphrase": "远山项目的技术栈是什么？", "negative": "星河项目用了哪套技术？"}
+{"id": "cache-2201-owner", "base": "星河项目是谁负责的？", "paraphrase": "星河项目的负责人是哪位？", "negative": "远山项目是谁负责的？"}
+{"id": "cache-sick-leave", "base": "员工一年能休多少天带薪病假？", "paraphrase": "每年带薪病假有多少天？", "negative": "员工一年能休多少天带薪年假？"}

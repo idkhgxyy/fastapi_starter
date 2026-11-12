@@ -1,0 +1,20 @@
+{"id": "job-106366-language", "category": "basic", "question": "J106366 这个岗位要求掌握哪些编程语言？", "expected_documents": ["eval-job-posts-a.md"], "expected_keywords": ["python", "go"]}
+{"id": "job-108810-framework", "category": "basic", "question": "J108810 岗位主要使用什么深度学习框架？", "expected_documents": ["eval-job-posts-a.md"], "expected_keywords": ["pytorch"]}
+{"id": "job-103045-tool", "category": "basic", "question": "J103045 测试岗要求会用什么自动化测试工具？", "expected_documents": ["eval-job-posts-a.md"], "expected_keywords": ["pytest"]}
+{"id": "job-104521-frontend", "category": "basic", "question": "J104521 前端岗位要求熟悉哪些技术？", "expected_documents": ["eval-job-posts-b.md"], "expected_keywords": ["typescript", "react"]}
+{"id": "project-2201-budget", "category": "basic", "question": "P-2201 星河项目的预算是多少？", "expected_documents": ["eval-projects.md"], "expected_keywords": ["1234"]}
+{"id": "project-2202-duration", "category": "basic", "question": "P-2202 远山项目的计划周期是多久？", "expected_documents": ["eval-projects.md"], "expected_keywords": ["12"]}
+{"id": "policy-annual-leave", "category": "basic", "question": "员工入职满一年后有几天带薪年假？", "expected_documents": ["eval-handbook.md"], "expected_keywords": ["10"]}
+{"id": "course-final-weight", "category": "basic", "question": "信息检索课程的期末考试成绩占总评多少？", "expected_documents": ["eval-course.md"], "expected_keywords": ["60"]}
+{"id": "project-2201-owner", "category": "paraphrase", "question": "星河项目是谁负责的？", "expected_documents": ["eval-project-team.md"], "expected_keywords": ["陈岚"]}
+{"id": "project-2202-stack", "category": "paraphrase", "question": "远山项目用了哪套技术？", "expected_documents": ["eval-project-team.md"], "expected_keywords": ["java"]}
+{"id": "policy-sick-leave", "category": "paraphrase", "question": "员工一年能休多少天带薪病假？", "expected_documents": ["eval-handbook.md"], "expected_keywords": ["15"]}
+{"id": "course-lab-weight", "category": "paraphrase", "question": "这门课的实验成绩在总评中占多大比例？", "expected_documents": ["eval-course.md"], "expected_keywords": ["40"]}
+{"id": "job-101366-language", "category": "near-id", "question": "J101366 岗位要求什么编程语言？", "expected_documents": ["eval-job-posts-b.md"], "expected_keywords": ["java", "spring"]}
+{"id": "job-106366-city", "category": "near-id", "question": "J106366 的工作地点在哪个城市？", "expected_documents": ["eval-job-posts-a.md"], "expected_keywords": ["深圳"]}
+{"id": "job-101366-city", "category": "near-id", "question": "J101366 的工作地点在哪里？", "expected_documents": ["eval-job-posts-b.md"], "expected_keywords": ["北京"]}
+{"id": "project-2201-budget-owner", "category": "cross-doc", "question": "P-2201 的预算和负责人分别是什么？", "expected_documents": ["eval-projects.md", "eval-project-team.md"], "expected_keywords": ["1234", "陈岚"], "require_all_documents": true, "expected_groups": [["1234"], ["陈岚"]]}
+{"id": "project-2202-duration-owner", "category": "cross-doc", "question": "P-2202 的计划周期和负责人分别是什么？", "expected_documents": ["eval-projects.md", "eval-project-team.md"], "expected_keywords": ["12", "周野"], "require_all_documents": true, "expected_groups": [["12 个月", "12个月", "12"], ["周野"]]}
+{"id": "negative-salary", "category": "negative", "question": "J106366 这个岗位的薪资范围是多少？", "expected_documents": [], "negative": true, "expected_any": ["未提及", "没有", "未提供", "无法", "不包含", "暂无", "未找到", "未说明", "不涉及", "未涉及"], "forbidden_patterns": ["\\d+\\s*[kK万]", "\\d+\\s*元"]}
+{"id": "negative-sla", "category": "negative", "question": "星河项目上线后的 SLA 标准是什么？", "expected_documents": [], "negative": true, "expected_any": ["未提及", "没有", "未提供", "无法", "不包含", "暂无", "未找到", "未说明", "不涉及", "未涉及"], "forbidden_patterns": []}
+{"id": "negative-housing", "category": "negative", "question": "公司提供住房补贴吗？", "expected_documents": [], "negative": true, "expected_any": ["未提及", "没有", "未提供", "无法", "不包含", "暂无", "未找到", "未说明", "不涉及", "未涉及"], "forbidden_patterns": []}

@@ -1,4 +1,4 @@
-.PHONY: help setup up down restart logs seed test lint smoke ui-smoke answer-eval backup backup-pull shell ollama-pull clean
+.PHONY: help setup up down restart logs seed test lint smoke ui-smoke answer-eval eval-pipeline backup backup-pull shell ollama-pull clean
 
 # 服务器地址不入库；运行时用 SERVER_HOST=ubuntu@... 覆盖
 SERVER_HOST ?= ubuntu@YOUR_SERVER
@@ -47,6 +47,9 @@ ui-smoke: ## 浏览器层冒烟（本机 Playwright；服务器先建 SSH 隧道
 
 answer-eval: ## 答案质量评测（真实 LLM，13 条，成本约 ¥0.05）
 	docker compose exec -w /app -e PYTHONPATH=/app api python scripts/answer_eval.py
+
+eval-pipeline: ## 合成知识库全链路评测（导入→检索→答案→缓存→流式→报告）
+	docker compose exec -w /app -e PYTHONPATH=/app -e EVAL_GIT_COMMIT=$$(git rev-parse --short HEAD) api python scripts/eval_pipeline.py
 
 backup: ## 立即在服务器做一次数据库备份（SERVER_HOST=...）
 	ssh $(SERVER_HOST) 'cd ~/fastapi_starter && ./scripts/backup_db_docker.sh'
