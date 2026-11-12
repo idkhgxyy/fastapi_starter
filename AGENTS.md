@@ -8,9 +8,11 @@
 FastAPI + SQLAlchemy 2 + PostgreSQL/pgvector + Redis + Celery/beat + React/Vite。
 
 - 本地启动：`docker compose up -d`
-- 测试：`make test`（强制 sqlite 内存库，安全入口）
-  - 等价命令：`docker compose exec -e DATABASE_URL='sqlite:///:memory:' api pytest tests/ -q`
-- 格式与静态检查：`docker compose exec api ruff format app tests && docker compose exec api ruff check app tests`
+- 测试：`make test`（强制 sqlite 内存库，安全入口；**只在本地跑**，2G 服务器上编 gevent 有 OOM 风险）
+  - 等价命令：`docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm --build -T -e DATABASE_URL='sqlite:///:memory:' api pytest tests/ -q`
+  - 测试依赖在本地 `Dockerfile.dev`（自包含，装 `requirements-dev.txt`，镜像 `fastapi_starter-api-dev`）；主 `Dockerfile` 不含测试依赖，线上与 CI 不受影响。刻意不 `FROM` 运行镜像：本机 OrbStack 下 `compose build api` 全 CACHED 也会换镜像 ID，以它为父层会让 pip 层每次失效
+  - `Dockerfile.dev` 与 `docker-compose.dev.yml` 均 **gitignored**，新克隆/换机器需自行重建；`make test` 跑一次性容器，不 exec 进运行中的 api，recreate 后也不用手工补装
+- 格式与静态检查：`make lint`（同一个 dev 镜像里跑 `ruff format app tests && ruff check app tests`；运行镜像不含 ruff，别再用 `docker compose exec api ruff ...`）
 - RAG/缓存评测：`docker compose exec -w /app -e PYTHONPATH=/app api python scripts/rag_eval.py`（需要真实知识库；`--skip-cache` 只跑检索）
 - 部署后冒烟：`make smoke`（或服务器上 `docker exec -w /app -e PYTHONPATH=/app fastapi-starter-api python scripts/smoke_test.py`）；专用 `smoke@example.com` 账号，覆盖健康/上传/RAG/缓存/流式/清理
 - 浏览器冒烟：本机 `/usr/bin/python3 scripts/ui_smoke_test.py`；服务器前端只监听 127.0.0.1，先建隧道 `ssh -N -L 18081:127.0.0.1:8000 ubuntu@YOUR_SERVER`，再设 `UI_SMOKE_BASE_URL=http://127.0.0.1:18081`

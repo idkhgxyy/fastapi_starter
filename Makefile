@@ -1,4 +1,4 @@
-.PHONY: help setup up down restart logs seed test smoke ui-smoke answer-eval backup backup-pull shell ollama-pull clean
+.PHONY: help setup up down restart logs seed test lint smoke ui-smoke answer-eval backup backup-pull shell ollama-pull clean
 
 # 服务器地址不入库；运行时用 SERVER_HOST=ubuntu@... 覆盖
 SERVER_HOST ?= ubuntu@YOUR_SERVER
@@ -31,8 +31,13 @@ logs-worker: ## 查看 Worker 实时日志
 seed: ## 灌入 demo 数据（demo@example.com / demo123456）
 	docker compose exec api python scripts/seed_demo_data.py
 
-test: ## 运行 pytest 测试（强制内存 sqlite，绝不动真实库）
-	docker compose exec -e DATABASE_URL='sqlite:///:memory:' api pytest tests/ -v
+test: ## 运行 pytest 测试（本地 dev 镜像 + 内存 sqlite，绝不动真实库）
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm --build -T \
+		-e DATABASE_URL='sqlite:///:memory:' api pytest tests/ -v
+
+lint: ## 格式化 + 静态检查（本地 dev 镜像里的 ruff；format 会改动文件）
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm --build -T \
+		api sh -c "ruff format app tests && ruff check app tests"
 
 smoke: ## 真实 HTTP 冒烟（专用账号 + 临时文档，验证上传/RAG/缓存/流式）
 	docker compose exec -w /app -e PYTHONPATH=/app api python scripts/smoke_test.py

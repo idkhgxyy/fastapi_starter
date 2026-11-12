@@ -27,12 +27,19 @@ docs/jd-samples/
 # 浏览器冒烟截图
 evaluation/artifacts/
 
+# 每轮评测报告（需要保留基线时把关键指标抄进 evaluation/README.md）
+evaluation/runs/
+
 # 运行时产物 / 本地测试样本
 celerybeat-schedule
 test_image_pdf.pdf
 
 # 数据库备份（含用户数据，不进仓库）
 backups/
+
+# 本地开发/测试镜像构建：只在本地跑，不进仓库、不上线
+Dockerfile.dev
+docker-compose.dev.yml
 
 # macOS
 .DS_Store
