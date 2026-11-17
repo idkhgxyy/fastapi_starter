@@ -16,6 +16,7 @@
 """
 
 import argparse
+import asyncio
 import json
 import os
 import re
@@ -31,10 +32,18 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.llm_call_log import LLMCallLog
+from app.models.qa_cache import QACacheEntry
 from app.models.user import User
 from app.services.llm_service import get_llm_client
 from app.services.pricing_service import estimate_cost_cny
-from app.services.semantic_cache import invalidate_user_cache
+from app.services.semantic_cache import (
+    _cosine_similarity,
+    _embed_query,
+    _entity_tokens,
+    _numeric_tokens,
+    _parse_embedding,
+    invalidate_user_cache,
+)
 
 BASE_URL = os.getenv("EVAL_BASE_URL", os.getenv("SMOKE_BASE_URL", "http://127.0.0.1:8000"))
 EMAIL = os.getenv("EVAL_EMAIL", "eval-synth@example.com")
@@ -379,6 +388,114 @@ def run_answers(
     }
 
 
+def classify_negative_reject(
+    similarity: float,
+    cached_question: str,
+    negative_question: str,
+    *,
+    has_sources: bool,
+) -> str:
+    """按 lookup_semantic_cache 的判定顺序归因单个候选的拒绝机制。
+
+    below_candidate/guard 是确定性拒绝；llm_judge 是概率性拒绝；
+    direct_hit_band 表示候选本应直通命中，未命中只能来自缓存外因素。
+    数字/专名守卫只认 ASCII token，纯中文实体替换在直通带没有任何静态防线。
+    """
+    if similarity < settings.SEMANTIC_CACHE_CANDIDATE_THRESHOLD:
+        return "below_candidate"
+    if _numeric_tokens(cached_question) != _numeric_tokens(negative_question):
+        return "guard"
+    # RAG 评测走 require_sources=True：无来源快照的候选按未命中处理
+    if not has_sources:
+        return "guard"
+    if similarity < settings.SEMANTIC_CACHE_THRESHOLD or (
+        _entity_tokens(cached_question) != _entity_tokens(negative_question)
+    ):
+        return "llm_judge"
+    return "direct_hit_band"
+
+
+def _attribute_negative(
+    db: Session,
+    user_id: int,
+    negative_question: str,
+    negative_ok: bool,
+    started_at: datetime,
+) -> Dict[str, Any]:
+    """负例查询后归因：相似度 + 拒绝机制 + 灰区校验的真实响应。
+
+    向量直接读 DB：路由把同一条 query_vector 传给 lookup 和 store，
+    负例条目里的向量就是判定时用的那条，无需重嵌（未落库时才回退重嵌）。
+    """
+    db.expire_all()
+    entries = (
+        db.query(QACacheEntry)
+        .filter(
+            QACacheEntry.user_id == user_id,
+            QACacheEntry.embedding_model == settings.EMBEDDING_MODEL_NAME,
+        )
+        .all()
+    )
+    negative_entry = next((e for e in entries if e.question == negative_question), None)
+    candidates = [e for e in entries if e.question != negative_question]
+
+    vector = None
+    if negative_entry is not None:
+        vector = _parse_embedding(negative_entry.embedding)
+    elif candidates:
+        try:
+            vector = asyncio.run(_embed_query(db, negative_question))
+        except Exception as exc:
+            print(f"[WARN] 负例向量重嵌失败，无法归因: {exc}")
+
+    scored: List[tuple] = []
+    if vector is not None:
+        for entry in candidates:
+            similarity = _cosine_similarity(vector, _parse_embedding(entry.embedding))
+            scored.append(
+                (
+                    similarity,
+                    classify_negative_reject(
+                        similarity,
+                        entry.question,
+                        negative_question,
+                        has_sources=bool(entry.source_chunks),
+                    ),
+                )
+            )
+
+    judge_responses = [
+        log.response
+        for log in db.query(LLMCallLog).filter(
+            LLMCallLog.user_id == user_id,
+            LLMCallLog.endpoint == "/semantic-cache/verify",
+            LLMCallLog.prompt.contains(negative_question),
+            # 评测账号的校验日志跨轮累积，只取本轮，否则历史响应混进证据
+            LLMCallLog.created_at >= started_at,
+        )
+    ]
+
+    reasons = [reason for _, reason in scored]
+    if not negative_ok:
+        reason = "hit"
+    elif "llm_judge" in reasons:
+        # 进了灰区却没有校验记录：judge 异常/缺 key 被静默按不命中，是故障不是安全
+        reason = "llm_judge" if judge_responses else "other"
+    elif "guard" in reasons:
+        reason = "guard"
+    elif reasons and all(r == "below_candidate" for r in reasons):
+        reason = "below_candidate"
+    else:
+        reason = "other"
+
+    return {
+        # pgvector 读回 float32，round 不会转回 Python float，必须显式 cast 才能落 JSON
+        "negative_similarity": round(float(max(s for s, _ in scored)), 4) if scored else None,
+        "negative_reject_reason": reason,
+        "negative_judge_responses": judge_responses,
+    }
+
+
 def run_cache(
     client: httpx.Client,
     token: str,
@@ -386,6 +503,7 @@ def run_cache(
     db: Session,
     user_id: int,
     top_k: int,
+    started_at: datetime,
 ) -> Dict[str, Any]:
     paraphrase_hits = negative_rejects = 0
     details: List[Dict[str, Any]] = []
@@ -403,6 +521,7 @@ def run_cache(
         negative_ok = not is_cache_hit(negative["answer"])
         paraphrase_hits += int(paraphrase_ok)
         negative_rejects += int(negative_ok)
+        attribution = _attribute_negative(db, user_id, pair["negative"], negative_ok, started_at)
         details.append(
             {
                 "id": pair["id"],
@@ -410,17 +529,24 @@ def run_cache(
                 "paraphrase_hit": paraphrase_ok,
                 "paraphrase_similarity": cache_similarity(paraphrase["answer"]),
                 "negative_reject": negative_ok,
+                **attribution,
             }
         )
         print(
             f"[{'OK  ' if paraphrase_ok and negative_ok else 'FAIL'}] cache {pair['id']} "
-            f"paraphrase={int(paraphrase_ok)} negative_reject={int(negative_ok)}"
+            f"paraphrase={int(paraphrase_ok)} negative_reject={int(negative_ok)} "
+            f"sim={attribution['negative_similarity']} "
+            f"reason={attribution['negative_reject_reason']}"
         )
 
+    breakdown = {key: 0 for key in ("below_candidate", "guard", "llm_judge", "other", "hit")}
+    for detail in details:
+        breakdown[detail["negative_reject_reason"]] += 1
     return {
         "pairs": len(pairs),
         "paraphrase_hit_rate": _rate(paraphrase_hits, len(pairs)),
         "negative_reject_rate": _rate(negative_rejects, len(pairs)),
+        "negative_reject_breakdown": breakdown,
         "details": details,
     }
 
@@ -634,6 +760,29 @@ def render_markdown(report: Dict[str, Any], previous: Optional[Dict[str, Any]]) 
                     f"missing={'、'.join(row['missing'])}；回答：{row['answer'][:160]}"
                 )
 
+    if cache:
+        breakdown = cache["negative_reject_breakdown"]
+        lines.extend(
+            [
+                "",
+                "## 缓存负例归因",
+                "",
+                f"确定性拒绝：below_candidate {breakdown['below_candidate']} + "
+                f"guard {breakdown['guard']}；概率性拒绝：llm_judge {breakdown['llm_judge']}；"
+                f"other {breakdown['other']}；误命中 {breakdown['hit']}",
+                "",
+                "| 组 | 负例相似度 | 拒绝机制 | 灰区校验响应 |",
+                "|---|---|---|---|",
+            ]
+        )
+        for detail in cache["details"]:
+            similarity = detail["negative_similarity"]
+            responses = "/".join(str(r) for r in detail["negative_judge_responses"]) or "-"
+            lines.append(
+                f"| {detail['id']} | {similarity if similarity is not None else '-'} "
+                f"| {detail['negative_reject_reason']} | {responses} |"
+            )
+
     if cache and any(not d["negative_reject"] for d in cache["details"]):
         lines.extend(["", "## 缓存误命中", ""])
         for detail in cache["details"]:
@@ -664,6 +813,9 @@ def render_markdown(report: Dict[str, Any], previous: Optional[Dict[str, Any]]) 
             "- 语料与题集固定，分数用于跨轮回归比较；换语料后不与历史报告直接可比。",
             "- 合成题只能证明检索/缓存链路是否退化，不能代表真实用户场景的质量。",
             "- 报告仅在 `git_commit`、模型和 `top_k` 一致时横向比较有意义。",
+            "- 负例归因：below_candidate（相似度未达候选下限）与 guard（数字/来源守卫）是确定性拒绝；"
+            "llm_judge 是概率性拒绝，随模型与措辞波动；other 表示缓存外因素"
+            "（校验故障、问句不可缓存等），需排查。",
             "",
         ]
     )
@@ -709,7 +861,11 @@ def run(args: argparse.Namespace) -> int:
 
             retrieval = run_retrieval(client, token, items, name_by_id, args.top_k)
             answer = run_answers(client, token, items, args.top_k, db, user.id)
-            cache = run_cache(client, token, pairs, db, user.id, args.top_k) if pairs else None
+            cache = (
+                run_cache(client, token, pairs, db, user.id, args.top_k, started_at)
+                if pairs
+                else None
+            )
             stream = None if args.skip_stream else run_stream(client, token, args.top_k)
 
             if args.cleanup:
@@ -785,7 +941,12 @@ def run(args: argparse.Namespace) -> int:
                 "cache": cache
                 and {
                     key: cache[key]
-                    for key in ("pairs", "paraphrase_hit_rate", "negative_reject_rate")
+                    for key in (
+                        "pairs",
+                        "paraphrase_hit_rate",
+                        "negative_reject_rate",
+                        "negative_reject_breakdown",
+                    )
                 },
                 "stream": stream and {"n": stream["n"], "pass_rate": stream["pass_rate"]},
                 "cost_cny": cost["cost_cny"],
