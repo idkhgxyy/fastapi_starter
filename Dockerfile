@@ -8,9 +8,10 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json* ./
-# 国内镜像源加速（海外构建可通过 --build-arg 覆盖或还原）
+# 国内镜像源加速；镜像源挂起时超时回退官方源（lock 的 resolved 全指向镜像源，回退必须忽略 lock）
 RUN npm config set registry https://registry.npmmirror.com \
-    && (npm ci --prefer-offline 2>/dev/null || npm install)
+    && (npm ci --prefer-offline --fetch-retries=1 --fetch-timeout=60000 \
+        || npm install --no-package-lock --registry=https://registry.npmjs.org --fetch-timeout=120000)
 COPY frontend/ .
 RUN npm run build
 
