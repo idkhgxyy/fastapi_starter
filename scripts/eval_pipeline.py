@@ -71,11 +71,14 @@ def _env_value(key: str) -> str:
     return ""
 
 
-PASSWORD = os.getenv("EVAL_PASSWORD") or _env_value("EVAL_PASSWORD")
-if not PASSWORD:
-    PASSWORD = os.getenv("SMOKE_PASSWORD") or _env_value("SMOKE_PASSWORD")
-if not PASSWORD:
-    raise SystemExit("EVAL_PASSWORD 未设置（可复用 SMOKE_PASSWORD，不要写进仓库）")
+def _password() -> str:
+    # 延迟到登录时解析：模块级 raise 会让 pytest 收集导入本文件的测试时直接崩溃
+    password = os.getenv("EVAL_PASSWORD") or _env_value("EVAL_PASSWORD")
+    if not password:
+        password = os.getenv("SMOKE_PASSWORD") or _env_value("SMOKE_PASSWORD")
+    if not password:
+        raise SystemExit("EVAL_PASSWORD 未设置（可复用 SMOKE_PASSWORD，不要写进仓库）")
+    return password
 
 
 def _check(condition: bool, message: str) -> None:
@@ -100,7 +103,8 @@ def _rate(hits: int, total: int) -> float:
 
 
 def login_or_register(client: httpx.Client) -> str:
-    login = client.post("/api/v1/auth/login", data={"username": EMAIL, "password": PASSWORD})
+    password = _password()
+    login = client.post("/api/v1/auth/login", data={"username": EMAIL, "password": password})
     if login.status_code == 200:
         return login.json()["access_token"]
     if login.status_code != 401:
@@ -111,7 +115,7 @@ def login_or_register(client: httpx.Client) -> str:
         json={
             "username": USERNAME,
             "email": EMAIL,
-            "password": PASSWORD,
+            "password": password,
             "full_name": "Eval Synth",
         },
     )
@@ -119,7 +123,7 @@ def login_or_register(client: httpx.Client) -> str:
         raise EvalFailure(
             f"评测账号不存在且注册失败: HTTP {created.status_code} {created.text[:200]}"
         )
-    login = client.post("/api/v1/auth/login", data={"username": EMAIL, "password": PASSWORD})
+    login = client.post("/api/v1/auth/login", data={"username": EMAIL, "password": password})
     _check(login.status_code == 200, f"注册后登录失败: HTTP {login.status_code}")
     return login.json()["access_token"]
 

@@ -11,6 +11,18 @@ from app.models.llm_call_log import LLMCallLog
 from app.models.qa_cache import QACacheEntry
 from scripts.eval_pipeline import _attribute_negative, classify_negative_reject
 
+
+def test_password_missing_raises_only_when_called(monkeypatch):
+    """口令校验必须在调用时而非导入时：CI 无 EVAL_PASSWORD/.env，模块级 raise 会炸收集。"""
+    import scripts.eval_pipeline as ep
+
+    monkeypatch.delenv("EVAL_PASSWORD", raising=False)
+    monkeypatch.delenv("SMOKE_PASSWORD", raising=False)
+    monkeypatch.setattr(ep, "_env_value", lambda key: "")
+    with pytest.raises(SystemExit):
+        ep._password()
+
+
 DIM = 1024
 ANNUAL = "员工入职满一年后有几天带薪年假？"
 SICK = "员工每年有多少天带薪病假？"
